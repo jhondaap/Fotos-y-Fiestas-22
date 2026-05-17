@@ -125,6 +125,22 @@ async function startServer() {
   });
 
   // Products
+  app.get("/api/products/barcode/:barcode", (req, res) => {
+    const { barcode } = req.params;
+    const product = db.prepare(`
+      SELECT p.*, c.nombre_categoria 
+      FROM products p 
+      LEFT JOIN categories c ON p.categoria_id = c.id
+      WHERE p.barcode = ? AND p.activo = 1
+    `).get(barcode);
+    
+    if (product) {
+      res.json(product);
+    } else {
+      res.status(404).json({ success: false, message: "Producto no encontrado" });
+    }
+  });
+
   app.get("/api/products", (req, res) => {
     const products = db.prepare(`
       SELECT p.*, c.nombre_categoria 

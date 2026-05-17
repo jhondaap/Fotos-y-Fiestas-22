@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Product, Category } from "../types";
 import { 
   Plus, 
@@ -12,7 +12,9 @@ import {
   X,
   MoreVertical,
   Trash2,
-  Trash
+  Trash,
+  QrCode,
+  Scan
 } from "lucide-react";
 import { formatCurrency, cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
@@ -33,10 +35,20 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
   const [newCategory, setNewCategory] = useState({ nombre_categoria: "", descripcion: "" });
   const [activeMenuId, setActiveMenuId] = useState<number | null>(null);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [scannerInput, setScannerInput] = useState("");
+  const scannerRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!isModalOpen) {
+      setTimeout(() => {
+        scannerRef.current?.focus();
+      }, 100);
+    }
+  }, [isModalOpen]);
 
   useEffect(() => {
     if (initialScannedCode && products.length > 0) {
@@ -74,6 +86,34 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
     const matchesCategory = selectedCategory === "all" || p.categoria_id === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  const handleScannerSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!scannerInput.trim()) return;
+
+    try {
+      const res = await fetch(`/api/products/barcode/${scannerInput}`);
+      if (res.ok) {
+        const product = await res.json();
+        setEditingProduct(product);
+      } else {
+        // Not found - prepare for new product
+        setEditingProduct({ 
+          nombre: "", 
+          precio: 0, 
+          costo: 0, 
+          stock_actual: 0, 
+          stock_minimo: 2, 
+          categoria_id: categories.length > 0 ? categories[0].id : 1, 
+          barcode: scannerInput 
+        });
+      }
+      setIsModalOpen(true);
+      setScannerInput("");
+    } catch (error) {
+      console.error("Error scanning barcode:", error);
+    }
+  };
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,6 +172,45 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-10">
+      {/* Scanner Section */}
+      <div className="bg-brand-forest p-8 rounded-[3rem] shadow-2xl shadow-brand-forest/30 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-brand-lime/10 -mr-20 -mt-20 rounded-full blur-3xl" />
+        <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+          <div className="w-20 h-20 bg-brand-lime text-brand-forest rounded-3xl flex items-center justify-center shadow-lg transform -rotate-3">
+            <Scan size={40} />
+          </div>
+          <div className="flex-1 space-y-2 text-center md:text-left">
+            <h2 className="text-3xl font-black text-white tracking-tighter uppercase">Escáner de Inventario</h2>
+            <p className="text-white/60 font-medium italic">Conecta tu escáner y apunta al código de barras para registrar o editar.</p>
+          </div>
+          <form 
+            onSubmit={handleScannerSubmit}
+            className="w-full md:w-auto min-w-[320px]"
+          >
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-5 flex items-center text-brand-lime transition-transform group-focus-within:scale-110">
+                <QrCode size={24} />
+              </div>
+              <input 
+                ref={scannerRef}
+                type="text"
+                placeholder="Escanea o escribe código..."
+                value={scannerInput}
+                onChange={(e) => setScannerInput(e.target.value)}
+                className="w-full bg-white/10 border-2 border-white/20 rounded-[2rem] py-6 pl-16 pr-6 text-xl font-black text-white placeholder:text-white/30 focus:bg-white/20 focus:border-brand-lime outline-none transition-all shadow-inner"
+                autoFocus
+              />
+              <button 
+                type="submit"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-3 bg-brand-lime text-brand-forest rounded-2xl hover:bg-[#7DFA7D] transition-colors active:scale-95"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm relative overflow-hidden group">
