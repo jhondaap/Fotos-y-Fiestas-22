@@ -1,0 +1,8 @@
+{
+  "name": "Fotos y Fiestas",
+  "description": "Sistema de gestión interna para piñatería: control de inventario, ventas rápidas, apartados de arreglos y reportes de ganancias.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
