@@ -3,9 +3,16 @@ import { Apartado } from "../types";
 import { Plus, Search, User, Clock, CheckCircle2, DollarSign, Calendar, X, Save, MoreVertical, Trash2, Edit2, Trash } from "lucide-react";
 import { formatCurrency, cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
+import {
+  fetchApartados,
+  createApartado,
+  updateApartado,
+  deleteApartado
+} from "../lib/supabaseService";
 
 export default function Apartados() {
   const [apartados, setApartados] = useState<Apartado[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newApartado, setNewApartado] = useState<Partial<Apartado>>({
     cliente_nombre: "",
@@ -18,27 +25,43 @@ export default function Apartados() {
   const [apartadoToDelete, setApartadoToDelete] = useState<Apartado | null>(null);
 
   useEffect(() => {
-    fetchApartados();
+    fetchData();
   }, []);
 
-  const fetchApartados = async () => {
-    const res = await fetch("/api/apartados");
-    setApartados(await res.json());
+  const fetchData = async () => {
+    try {
+      const data = await fetchApartados();
+      setApartados(data);
+    } catch (error) {
+      console.error("Error fetching apartados:", error);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    const method = newApartado.id ? "PATCH" : "POST";
-    const url = newApartado.id ? `/api/apartados/${newApartado.id}` : "/api/apartados";
-
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newApartado),
-    });
-    if (res.ok) {
+    try {
+      if (newApartado.id) {
+        // Update
+        await updateApartado(newApartado.id, {
+          cliente_nombre: newApartado.cliente_nombre,
+          descripcion: newApartado.descripcion,
+          total: Number(newApartado.total),
+          abono: Number(newApartado.abono),
+          fecha_entrega: newApartado.fecha_entrega
+        });
+      } else {
+        // Create new
+        await createApartado({
+          cliente_nombre: newApartado.cliente_nombre,
+          descripcion: newApartado.descripcion,
+          total: Number(newApartado.total),
+          abono: Number(newApartado.abono || 0),
+          fecha_entrega: newApartado.fecha_entrega,
+          estado: "Pendiente"
+        });
+      }
       setIsModalOpen(false);
-      fetchApartados();
+      fetchData();
       setNewApartado({ 
         cliente_nombre: "", 
         descripcion: "", 
@@ -46,6 +69,9 @@ export default function Apartados() {
         abono: 0, 
         fecha_entrega: new Date().toISOString().split('T')[0] 
       });
+    } catch (error) {
+      console.error("Error saving apartado:", error);
+      alert("Error al guardar apartado");
     }
   };
 
@@ -53,27 +79,32 @@ export default function Apartados() {
     if (!apartadoToDelete) return;
 
     try {
-      const res = await fetch(`/api/apartados/${apartadoToDelete.id}`, {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
-        setApartadoToDelete(null);
-        fetchApartados();
-      }
+      await deleteApartado(apartadoToDelete.id);
+      setApartadoToDelete(null);
+      fetchData();
     } catch (error) {
       console.error("Error deleting apartado:", error);
+      alert("Error al eliminar el apartado");
     }
   };
 
   const updateEstado = async (id: number, abono: number, estado: string) => {
-    await fetch(`/api/apartados/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ abono, estado }),
-    });
-    fetchApartados();
+    try {
+      await updateApartado(id, { 
+        abono: Number(abono), 
+        estado: estado as "Pendiente" | "Entregado"
+      });
+      fetchData();
+    } catch (error) {
+      console.error("Error updating apartado status:", error);
+      alert("Error al actualizar estado del apartado");
+    }
   };
+
+  const filteredApartados = apartados.filter(a => 
+    a.cliente_nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    a.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto py-4">
@@ -84,7 +115,16 @@ export default function Apartados() {
           <p className="text-slate-400 text-sm font-medium">Gestiona pedidos especiales y anticipos de clientes</p>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setNewApartado({ 
+              cliente_nombre: "", 
+              descripcion: "", 
+              total: 0, 
+              abono: 0, 
+              fecha_entrega: new Date().toISOString().split('T')[0] 
+            });
+            setIsModalOpen(true);
+          }}
           className="bg-brand-forest hover:bg-[#1B3022]/90 text-white font-bold py-4 px-8 rounded-2xl flex items-center gap-3 shadow-lg shadow-brand-forest/20 transition-all active:scale-95 relative z-10"
         >
           <Plus size={24} />
@@ -92,8 +132,22 @@ export default function Apartados() {
         </button>
       </div>
 
+      {/* Search Filter */}
+      <div className="flex gap-4 bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+        <div className="flex-1 bg-slate-50 rounded-2xl px-6 flex items-center gap-3 border-2 border-transparent focus-within:border-brand-lime focus-within:bg-white transition-all">
+          <Search className="text-slate-400" size={20} />
+          <input 
+            type="text" 
+            placeholder="Buscar por cliente o descripción..." 
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full py-4 bg-transparent border-none outline-none text-slate-700 font-bold placeholder-slate-400 text-sm"
+          />
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {apartados.map(a => (
+        {filteredApartados.map(a => (
           <motion.div 
             key={a.id}
             layout
@@ -236,25 +290,25 @@ export default function Apartados() {
                 <div className="space-y-4">
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Cliente</label>
-                    <input required type="text" value={newApartado.cliente_nombre} onChange={e => setNewApartado({...newApartado, cliente_nombre: e.target.value})} className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-brand-lime outline-none transition-all" placeholder="Nombre completo..." />
+                    <input required type="text" value={newApartado.cliente_nombre || ""} onChange={e => setNewApartado({...newApartado, cliente_nombre: e.target.value})} className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-brand-lime outline-none transition-all" placeholder="Nombre completo..." />
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Descripción del pedido</label>
-                    <textarea rows={2} value={newApartado.descripcion} onChange={e => setNewApartado({...newApartado, descripcion: e.target.value})} className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-brand-lime outline-none transition-all resize-none" placeholder="¿Qué incluye el apartado?" />
+                    <textarea rows={2} value={newApartado.descripcion || ""} onChange={e => setNewApartado({...newApartado, descripcion: e.target.value})} className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-brand-lime outline-none transition-all resize-none" placeholder="¿Qué incluye el apartado?" />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Presupuesto</label>
-                      <input required type="number" value={newApartado.total} onChange={e => setNewApartado({...newApartado, total: Number(e.target.value)})} className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-brand-lime outline-none transition-all" />
+                      <input required type="number" value={newApartado.total || 0} onChange={e => setNewApartado({...newApartado, total: Number(e.target.value)})} className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-brand-lime outline-none transition-all" />
                     </div>
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Abono Inicial</label>
-                      <input required type="number" value={newApartado.abono} onChange={e => setNewApartado({...newApartado, abono: Number(e.target.value)})} className="w-full bg-brand-lime/10 border-none rounded-2xl p-4 text-sm font-black text-brand-forest focus:ring-2 focus:ring-brand-lime outline-none transition-all" />
+                      <input required type="number" value={newApartado.abono || 0} onChange={e => setNewApartado({...newApartado, abono: Number(e.target.value)})} className="w-full bg-brand-lime/10 border-none rounded-2xl p-4 text-sm font-black text-brand-forest focus:ring-2 focus:ring-brand-lime outline-none transition-all" />
                     </div>
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Fecha compromiso</label>
-                    <input required type="date" value={newApartado.fecha_entrega} onChange={e => setNewApartado({...newApartado, fecha_entrega: e.target.value})} className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-brand-lime outline-none transition-all" />
+                    <input required type="date" value={newApartado.fecha_entrega || ""} onChange={e => setNewApartado({...newApartado, fecha_entrega: e.target.value})} className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-brand-lime outline-none transition-all" />
                   </div>
                 </div>
                 <button type="submit" className="w-full bg-brand-lime hover:bg-[#7DFA7D] text-brand-forest font-black py-5 rounded-3xl shadow-xl shadow-brand-lime/30 flex items-center justify-center gap-2 transition-all">

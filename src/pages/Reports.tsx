@@ -14,6 +14,12 @@ import {
   Lock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import {
+  fetchDailyReport,
+  fetchSoldItems as fetchSoldItemsService,
+  fetchCalendarData as fetchCalendarDataService,
+  closeDay
+} from "../lib/supabaseService";
 
 interface CalendarData {
   daily: { date: string; total: number }[];
@@ -41,18 +47,30 @@ export default function Reports() {
   }, [isCalendarOpen, currentViewDate]);
 
   const fetchReport = async () => {
-    const res = await fetch(`/api/reports/daily?date=${date}`);
-    setReport(await res.json());
+    try {
+      const data = await fetchDailyReport(date);
+      setReport(data);
+    } catch (error) {
+      console.error("Error fetching report:", error);
+    }
   };
 
   const fetchSoldItems = async () => {
-    const res = await fetch(`/api/reports/sold-items?date=${date}`);
-    setSoldItems(await res.json());
+    try {
+      const data = await fetchSoldItemsService(date);
+      setSoldItems(data);
+    } catch (error) {
+      console.error("Error fetching sold items:", error);
+    }
   };
 
   const fetchCalendarData = async (year: number) => {
-    const res = await fetch(`/api/reports/calendar?year=${year}`);
-    setCalendarData(await res.json());
+    try {
+      const data = await fetchCalendarDataService(year);
+      setCalendarData(data);
+    } catch (error) {
+      console.error("Error fetching calendar data:", error);
+    }
   };
 
   const changeDate = (days: number) => {
@@ -62,12 +80,14 @@ export default function Reports() {
   };
 
   const handleCloseDay = async () => {
-    const res = await fetch("/api/reports/close-day", { method: "POST" });
-    if (res.ok) {
+    try {
+      await closeDay();
       setIsCloseDayOpen(false);
-      // In a real scenario we'd redirect or reset
       alert("Corte de caja realizado con éxito. El reporte ha sido guardado.");
       fetchReport();
+    } catch (error) {
+      console.error("Error closing day:", error);
+      alert("Error al realizar el corte de caja.");
     }
   };
 

@@ -3,6 +3,7 @@ import { User } from "../types";
 import { User as UserIcon, Camera, Save, ArrowLeft } from "lucide-react";
 import { motion } from "motion/react";
 import { cn } from "../lib/utils";
+import { updateUser } from "../lib/supabaseService";
 
 interface ProfileProps {
   user: User;
@@ -39,22 +40,16 @@ export default function Profile({ user, onUpdateUser, onBack }: ProfileProps) {
     setMessage(null);
 
     try {
-      const res = await fetch(`/api/users/${user.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre, foto_perfil: fotoPerfil }),
-      });
-
-      const data = await res.json();
+      const data = await updateUser(user.id, { nombre, foto_perfil: fotoPerfil });
       if (data.success) {
-        onUpdateUser(data.user);
+        onUpdateUser(data.user as User);
         setMessage({ type: "success", text: "Perfil actualizado correctamente" });
       } else {
         setMessage({ type: "error", text: "Error al actualizar el perfil" });
       }
     } catch (error) {
       console.error(error);
-      setMessage({ type: "error", text: "Error de conexión" });
+      setMessage({ type: "error", text: "Error de conexión con la base de datos" });
     } finally {
       setIsSaving(false);
     }

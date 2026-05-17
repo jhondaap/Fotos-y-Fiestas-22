@@ -3,6 +3,7 @@ import { Product, SaleItem, User, Category } from "../types";
 import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle2, AlertTriangle, Tag } from "lucide-react";
 import { formatCurrency, cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
+import { fetchProducts, fetchCategories, createSale } from "../lib/supabaseService";
 
 interface PosProps {
   user: User;
@@ -23,14 +24,16 @@ export default function Pos({ user }: PosProps) {
   }, []);
 
   const fetchData = async () => {
-    const [pRes, cRes] = await Promise.all([
-      fetch("/api/products"),
-      fetch("/api/categories")
-    ]);
-    const pData = await pRes.json();
-    const cData = await cRes.json();
-    setProducts(pData);
-    setCategories(cData);
+    try {
+      const [pData, cData] = await Promise.all([
+        fetchProducts(),
+        fetchCategories()
+      ]);
+      setProducts(pData);
+      setCategories(cData);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
   };
 
   const filteredProducts = useMemo(() => {
@@ -124,24 +127,19 @@ export default function Pos({ user }: PosProps) {
         return sum + (((item.precio || 0) - costo) * (item.cantidad || 0));
       }, 0);
 
-      const res = await fetch("/api/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: cart,
-          total_venta: total,
-          ganancia_total,
-          usuario_id: user.id
-        })
+      await createSale({
+        items: cart,
+        total_venta: total,
+        ganancia_total,
+        usuario_id: user.id
       });
 
-      if (res.ok) {
-        setCart([]);
-        setShowSuccess(true);
-        setTimeout(() => setShowSuccess(false), 3000);
-        fetchData(); // Refresh stocks
-      }
+      setCart([]);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+      fetchData(); // Refresh stocks
     } catch (err) {
+      console.error(err);
       alert("Error al procesar la venta");
     } finally {
       setIsLoading(false);

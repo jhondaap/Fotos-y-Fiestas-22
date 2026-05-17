@@ -14,10 +14,22 @@ import {
   Trash2,
   Trash,
   QrCode,
-  Scan
+  Scan,
+  Loader2,
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
 import { formatCurrency, cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
+import {
+  fetchProducts,
+  fetchCategories,
+  fetchProductByBarcode,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  createCategory
+} from "../lib/supabaseService";
 
 interface InventoryProps {
   initialScannedCode?: string | null;
@@ -33,6 +45,8 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [newCategory, setNewCategory] = useState({ nombre_categoria: "", descripcion: "" });
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [categoryMessage, setCategoryMessage] = useState<{ type: "success" | "error", text: string } | null>(null);
   const [activeMenuId, setActiveMenuId] = useState<number | null>(null);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [scannerInput, setScannerInput] = useState("");
@@ -72,12 +86,16 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
   }, [initialScannedCode, products, categories, onClearScannedCode]);
 
   const fetchData = async () => {
-    const [pRes, cRes] = await Promise.all([
-      fetch("/api/products"),
-      fetch("/api/categories")
-    ]);
-    setProducts(await pRes.json());
-    setCategories(await cRes.json());
+    try {
+      const [pData, cData] = await Promise.all([
+        fetchProducts(),
+        fetchCategories()
+      ]);
+      setProducts(pData);
+      setCategories(cData);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
   };
 
   const filteredProducts = products.filter(p => {
@@ -92,9 +110,8 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
     if (!scannerInput.trim()) return;
 
     try {
-      const res = await fetch(`/api/products/barcode/${scannerInput}`);
-      if (res.ok) {
-        const product = await res.json();
+      const product = await fetchProductByBarcode(scannerInput);
+      if (product) {
         setEditingProduct(product);
       } else {
         // Not found - prepare for new product
@@ -104,7 +121,7 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
           costo: 0, 
           stock_actual: 0, 
           stock_minimo: 2, 
-          categoria_id: categories.length > 0 ? categories[0].id : 1, 
+          categoria_id: categories.length > 0 ? categories[0].id : undefined, 
           barcode: scannerInput 
         });
       }
@@ -119,34 +136,44 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
     e.preventDefault();
     if (!editingProduct) return;
 
-    const method = editingProduct.id ? "PATCH" : "POST";
-    const url = editingProduct.id ? `/api/products/${editingProduct.id}` : "/api/products";
-
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(editingProduct),
-    });
-
-    if (res.ok) {
+    try {
+      if (editingProduct.id) {
+        await updateProduct(String(editingProduct.id), editingProduct);
+      } else {
+        await createProduct(editingProduct);
+      }
       setIsModalOpen(false);
       setEditingProduct(null);
       fetchData();
+    } catch (error) {
+      console.error("Error saving product:", error);
+      alert("Error al guardar el producto");
     }
   };
 
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch("/api/categories", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newCategory),
-    });
+    if (!newCategory.nombre_categoria.trim()) return;
 
-    if (res.ok) {
-      setIsCategoryModalOpen(false);
-      setNewCategory({ nombre_categoria: "", descripcion: "" });
-      fetchData();
+    setIsCreatingCategory(true);
+    setCategoryMessage(null);
+
+    try {
+      await createCategory(newCategory);
+      setCategoryMessage({ type: "success", text: "¡Categoría registrada con éxito!" });
+      
+      // Keep modal open briefly to show success animation/state
+      setTimeout(() => {
+        setIsCategoryModalOpen(false);
+        setNewCategory({ nombre_categoria: "", descripcion: "" });
+        setCategoryMessage(null);
+        fetchData();
+      }, 1500);
+    } catch (error) {
+      console.error("Error creating category:", error);
+      setCategoryMessage({ type: "error", text: "Error al registrar la categoría. Intente de nuevo." });
+    } finally {
+      setIsCreatingCategory(false);
     }
   };
 
@@ -154,16 +181,12 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
     if (!productToDelete) return;
 
     try {
-      const res = await fetch(`/api/products/${productToDelete.id}`, {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
-        setProductToDelete(null);
-        fetchData();
-      }
+      await deleteProduct(String(productToDelete.id));
+      setProductToDelete(null);
+      fetchData();
     } catch (error) {
       console.error("Error deleting product:", error);
+      alert("No se pudo eliminar el producto. Podría estar en uso en ventas.");
     }
   };
 
@@ -428,7 +451,8 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
                       type="text" 
                       value={editingProduct?.barcode || ""}
                       onChange={e => setEditingProduct({ ...editingProduct, barcode: e.target.value })}
-                      className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-brand-lime outline-none transition-all"
+                      disabled={!!editingProduct?.id}
+                      className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-brand-lime outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                   <div>
@@ -572,6 +596,17 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
               </div>
 
               <form onSubmit={handleCreateCategory} className="p-8 space-y-6">
+                {categoryMessage && (
+                  <div className={cn(
+                    "p-4 rounded-2xl flex items-center gap-3 text-sm font-bold border",
+                    categoryMessage.type === "success" 
+                      ? "bg-brand-lime/10 text-brand-forest border-brand-lime/20" 
+                      : "bg-red-50 text-red-500 border-red-100"
+                  )}>
+                    {categoryMessage.type === "success" ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+                    {categoryMessage.text}
+                  </div>
+                )}
                 <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Nombre</label>
                   <input 
@@ -595,9 +630,17 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
                 </div>
                 <button 
                   type="submit"
-                  className="w-full bg-brand-lime hover:bg-[#7DFA7D] text-brand-forest font-black py-5 rounded-3xl shadow-xl shadow-brand-lime/30 transition-all"
+                  disabled={isCreatingCategory}
+                  className="w-full bg-brand-lime hover:bg-[#7DFA7D] text-brand-forest font-black py-5 rounded-3xl shadow-xl shadow-brand-lime/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  REGISTRAR CATEGORÍA
+                  {isCreatingCategory ? (
+                    <>
+                      <Loader2 className="animate-spin" size={20} />
+                      REGISTRANDO...
+                    </>
+                  ) : (
+                    "REGISTRAR CATEGORÍA"
+                  )}
                 </button>
               </form>
             </motion.div>

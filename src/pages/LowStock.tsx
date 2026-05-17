@@ -3,6 +3,7 @@ import { Product } from "../types";
 import { AlertTriangle, Package, RefreshCw, ChevronRight } from "lucide-react";
 import { motion } from "motion/react";
 import { formatCurrency, cn } from "../lib/utils";
+import { fetchProducts } from "../lib/supabaseService";
 
 export default function LowStock() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -15,8 +16,7 @@ export default function LowStock() {
   const fetchLowStock = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/products");
-      const data: Product[] = await res.json();
+      const data = await fetchProducts();
       // Filter for products where current stock is less than or equal to minimum stock
       const lowStockItems = data.filter(p => p.stock_actual <= p.stock_minimo);
       setProducts(lowStockItems);
