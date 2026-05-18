@@ -27,13 +27,48 @@ interface CalendarData {
 }
 
 export default function Reports() {
-  const [report, setReport] = useState<DailyReport>({ total_dia: 0, ganancia_dia: 0, ventas_count: 0 });
-  const [soldItems, setSoldItems] = useState<{ nombre: string; total_cantidad: number; total_venta: number }[]>([]);
+  const [report, setReport] = useState<DailyReport>({ 
+    total_dia: 0, 
+    ganancia_dia: 0, 
+    ventas_count: 0,
+    total_efectivo: 0,
+    total_bold: 0,
+    total_nequi: 0
+  });
+  const [soldItems, setSoldItems] = useState<{
+    barcode: string;
+    nombre: string;
+    cantidad: number;
+    precio_unitario: number;
+    total_venta: number;
+    metodo_pago: string;
+  }[]>([]);
+  const [activeFilter, setActiveFilter] = useState<"Todos" | "Efectivo" | "Bold" | "Nequi">("Todos");
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isCloseDayOpen, setIsCloseDayOpen] = useState(false);
   const [calendarData, setCalendarData] = useState<CalendarData>({ daily: [], monthly: [] });
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
+
+  const filteredAndGroupedItems = useMemo(() => {
+    let itemsToGroup = soldItems;
+    if (activeFilter !== "Todos") {
+      itemsToGroup = soldItems.filter(item => item.metodo_pago === activeFilter);
+    }
+
+    const grouped: { [barcode: string]: { nombre: string; total_cantidad: number; total_venta: number } } = {};
+
+    itemsToGroup.forEach(item => {
+      const key = item.barcode || item.nombre;
+      if (!grouped[key]) {
+        grouped[key] = { nombre: item.nombre, total_cantidad: 0, total_venta: 0 };
+      }
+      grouped[key].total_cantidad += item.cantidad;
+      grouped[key].total_venta += item.total_venta;
+    });
+
+    return Object.values(grouped).sort((a, b) => b.total_cantidad - a.total_cantidad);
+  }, [soldItems, activeFilter]);
 
   useEffect(() => {
     fetchReport();
@@ -155,67 +190,180 @@ export default function Reports() {
         </div>
       </div>
 
-      {/* Main Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm relative overflow-hidden group"
-        >
-          <div className="absolute top-0 right-0 p-6 opacity-5 text-brand-forest transition-transform group-hover:scale-110">
-            <TrendingUp size={80} />
-          </div>
-          <div className="relative z-10">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-              <DollarSign size={14} className="text-brand-lime" />
-              Ingresos Brutos
-            </p>
-            <h3 className="text-4xl font-black text-slate-800 tracking-tighter">
-              {formatCurrency(report.total_dia || 0)}
-            </h3>
-          </div>
-        </motion.div>
+      {/* Main Stats (Clickable filter cards) */}
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Card 1: Total General */}
+          <motion.div
+            whileHover={{ y: -4 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setActiveFilter("Todos")}
+            className={cn(
+              "p-6 rounded-[2.5rem] border transition-all cursor-pointer relative overflow-hidden group select-none flex flex-col justify-between min-h-[140px]",
+              activeFilter === "Todos"
+                ? "bg-slate-900 border-slate-900 text-white shadow-lg"
+                : "bg-white border-slate-100 text-slate-800 hover:border-slate-300"
+            )}
+          >
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
+              <TrendingUp size={64} />
+            </div>
+            <div className="relative z-10 space-y-4">
+              <p className={cn(
+                "text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5",
+                activeFilter === "Todos" ? "text-brand-lime" : "text-slate-400"
+              )}>
+                📊 Total General
+              </p>
+              <h3 className="text-3xl font-black tracking-tighter">
+                {formatCurrency(report.total_dia || 0)}
+              </h3>
+              <p className={cn(
+                "text-[9px] font-bold uppercase tracking-wider",
+                activeFilter === "Todos" ? "text-white/60" : "text-slate-400"
+              )}>
+                Ver todo el historial
+              </p>
+            </div>
+          </motion.div>
 
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-brand-forest p-8 rounded-[2.5rem] shadow-xl shadow-brand-forest/20 relative overflow-hidden group text-white"
-        >
-          <div className="absolute top-0 right-0 p-6 opacity-10 transition-transform group-hover:scale-110">
-            <DollarSign size={80} />
-          </div>
-          <div className="relative z-10">
-            <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-6 flex items-center gap-2">
-              <TrendingUp size={14} />
-              Utilidad Neta
-            </p>
-            <h3 className="text-4xl font-black tracking-tighter">
-              {formatCurrency(report.ganancia_dia || 0)}
-            </h3>
-          </div>
-        </motion.div>
+          {/* Card 2: Efectivo */}
+          <motion.div
+            whileHover={{ y: -4 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setActiveFilter(prev => prev === "Efectivo" ? "Todos" : "Efectivo")}
+            className={cn(
+              "p-6 rounded-[2.5rem] border transition-all cursor-pointer relative overflow-hidden group select-none flex flex-col justify-between min-h-[140px]",
+              activeFilter === "Efectivo"
+                ? "bg-brand-lime border-brand-lime text-brand-forest shadow-lg shadow-brand-lime/20"
+                : "bg-white border-slate-100 text-slate-800 hover:border-brand-lime"
+            )}
+          >
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
+              <DollarSign size={64} />
+            </div>
+            <div className="relative z-10 space-y-4">
+              <p className={cn(
+                "text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5",
+                activeFilter === "Efectivo" ? "text-brand-forest" : "text-slate-400"
+              )}>
+                💵 Ventas Efectivo
+              </p>
+              <h3 className="text-3xl font-black tracking-tighter">
+                {formatCurrency(report.total_efectivo || 0)}
+              </h3>
+              <p className={cn(
+                "text-[9px] font-bold uppercase tracking-wider",
+                activeFilter === "Efectivo" ? "text-brand-forest/60" : "text-slate-400"
+              )}>
+                {activeFilter === "Efectivo" ? "Filtro activo 🔒" : "Filtrar por Efectivo"}
+              </p>
+            </div>
+          </motion.div>
 
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-brand-lime p-8 rounded-[2.5rem] shadow-lg shadow-brand-lime/20 relative overflow-hidden group text-brand-forest"
-        >
-          <div className="absolute top-0 right-0 p-6 opacity-20 transition-transform group-hover:scale-110 text-brand-forest">
-            <ShoppingCart size={80} />
+          {/* Card 3: Bold */}
+          <motion.div
+            whileHover={{ y: -4 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setActiveFilter(prev => prev === "Bold" ? "Todos" : "Bold")}
+            className={cn(
+              "p-6 rounded-[2.5rem] border transition-all cursor-pointer relative overflow-hidden group select-none flex flex-col justify-between min-h-[140px]",
+              activeFilter === "Bold"
+                ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/20"
+                : "bg-white border-slate-100 text-slate-800 hover:border-blue-600"
+            )}
+          >
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
+              <DollarSign size={64} />
+            </div>
+            <div className="relative z-10 space-y-4">
+              <p className={cn(
+                "text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5",
+                activeFilter === "Bold" ? "text-blue-200" : "text-slate-400"
+              )}>
+                💳 Ventas Bold
+              </p>
+              <h3 className="text-3xl font-black tracking-tighter">
+                {formatCurrency(report.total_bold || 0)}
+              </h3>
+              <p className={cn(
+                "text-[9px] font-bold uppercase tracking-wider",
+                activeFilter === "Bold" ? "text-white/60" : "text-slate-400"
+              )}>
+                {activeFilter === "Bold" ? "Filtro activo 🔒" : "Filtrar por Bold"}
+              </p>
+            </div>
+          </motion.div>
+
+          {/* Card 4: Nequi */}
+          <motion.div
+            whileHover={{ y: -4 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setActiveFilter(prev => prev === "Nequi" ? "Todos" : "Nequi")}
+            className={cn(
+              "p-6 rounded-[2.5rem] border transition-all cursor-pointer relative overflow-hidden group select-none flex flex-col justify-between min-h-[140px]",
+              activeFilter === "Nequi"
+                ? "bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-600/20"
+                : "bg-white border-slate-100 text-slate-800 hover:border-purple-600"
+            )}
+          >
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
+              <DollarSign size={64} />
+            </div>
+            <div className="relative z-10 space-y-4">
+              <p className={cn(
+                "text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5",
+                activeFilter === "Nequi" ? "text-purple-200" : "text-slate-400"
+              )}>
+                📱 Ventas Nequi
+              </p>
+              <h3 className="text-3xl font-black tracking-tighter">
+                {formatCurrency(report.total_nequi || 0)}
+              </h3>
+              <p className={cn(
+                "text-[9px] font-bold uppercase tracking-wider",
+                activeFilter === "Nequi" ? "text-white/60" : "text-slate-400"
+              )}>
+                {activeFilter === "Nequi" ? "Filtro activo 🔒" : "Filtrar por Nequi"}
+              </p>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Secondary Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Card: Utilidad Neta */}
+          <div className="bg-brand-forest p-6 rounded-[2rem] shadow-xl shadow-brand-forest/20 relative overflow-hidden group text-white flex items-center justify-between">
+            <div className="absolute top-0 right-0 p-4 opacity-10 transition-transform group-hover:scale-110">
+              <DollarSign size={64} />
+            </div>
+            <div className="relative z-10">
+              <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <TrendingUp size={12} />
+                Utilidad Neta del Día
+              </p>
+              <h3 className="text-3xl font-black tracking-tighter">
+                {formatCurrency(report.ganancia_dia || 0)}
+              </h3>
+            </div>
           </div>
-          <div className="relative z-10">
-            <p className="text-[10px] font-bold text-brand-forest/60 uppercase tracking-widest mb-6 flex items-center gap-2">
-              <Calendar size={14} />
-              Transacciones
-            </p>
-            <h3 className="text-5xl font-black tracking-tighter leading-none">
-              {report.ventas_count || 0}
-            </h3>
-            <p className="text-[10px] font-bold uppercase tracking-widest mt-2 opacity-50">Ventas Registradas</p>
+
+          {/* Card: Transacciones */}
+          <div className="bg-brand-lime p-6 rounded-[2rem] shadow-lg shadow-brand-lime/10 relative overflow-hidden group text-brand-forest flex items-center justify-between">
+            <div className="absolute top-0 right-0 p-4 opacity-20 transition-transform group-hover:scale-110">
+              <ShoppingCart size={64} />
+            </div>
+            <div className="relative z-10">
+              <p className="text-[10px] font-bold text-brand-forest/60 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <Calendar size={12} />
+                Transacciones Registradas
+              </p>
+              <h3 className="text-3xl font-black tracking-tighter leading-none">
+                {report.ventas_count || 0}
+              </h3>
+            </div>
           </div>
-        </motion.div>
+        </div>
       </div>
 
       {/* Information Box */}
@@ -251,9 +399,9 @@ export default function Reports() {
           </div>
         </div>
 
-        {soldItems.length > 0 ? (
+        {filteredAndGroupedItems.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {soldItems.map((item, idx) => (
+            {filteredAndGroupedItems.map((item, idx) => (
               <motion.div
                 key={idx}
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -284,7 +432,7 @@ export default function Reports() {
             <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-slate-200 mx-auto mb-4 border border-slate-100">
               <ShoppingCart size={24} />
             </div>
-            <h4 className="text-slate-400 font-bold text-sm">No se encontraron ventas de productos para esta fecha.</h4>
+            <h4 className="text-slate-400 font-bold text-sm">No se encontraron ventas de productos {activeFilter !== "Todos" ? `por ${activeFilter}` : ""} para esta fecha.</h4>
           </div>
         )}
       </div>

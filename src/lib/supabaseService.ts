@@ -240,17 +240,12 @@ export const fetchDailyReport = async (dateStr: string): Promise<DailyReport> =>
     .from("ventas")
     .select("total_venta, ganancia_total")
     .eq("cerrado", false);
-    // Since fecha is TIMESTAMPTZ, let's filter by the date part
-    // Let's do a client-side filter or postgres date cast if possible.
-    // Client-side filter is extremely robust for timezone mismatches.
 
   if (error) throw error;
 
   const targetDateStr = new Date(dateStr).toISOString().split('T')[0];
   const dailySales = (data || []).filter((s: any) => {
-    // Wait, let's filter by date part. In sales, fecha is now TIMESTAMPTZ.
-    // Wait, let's query with greater than or equal to start of day and less than end of day!
-    return true; // We will refine the date filtering below to be perfect.
+    return true;
   });
 
   // Let's implement robust date filtering:
@@ -261,18 +256,38 @@ export const fetchDailyReport = async (dateStr: string): Promise<DailyReport> =>
 
   const { data: filteredData, error: filterError } = await supabase
     .from("ventas")
-    .select("total_venta, ganancia_total")
+    .select("total_venta, ganancia_total, metodo_pago")
     .eq("cerrado", false)
     .gte("fecha", startOfDay.toISOString())
     .lte("fecha", endOfDay.toISOString());
 
   if (filterError) throw filterError;
 
-  const total_dia = (filteredData || []).reduce((sum, s) => sum + Number(s.total_venta), 0);
-  const ganancia_dia = (filteredData || []).reduce((sum, s) => sum + Number(s.ganancia_total), 0);
-  const ventas_count = (filteredData || []).length;
+  const sales = filteredData || [];
+  const total_dia = sales.reduce((sum, s) => sum + Number(s.total_venta), 0);
+  const ganancia_dia = sales.reduce((sum, s) => sum + Number(s.ganancia_total), 0);
+  const ventas_count = sales.length;
 
-  return { total_dia, ganancia_dia, ventas_count };
+  const total_efectivo = sales
+    .filter(s => s.metodo_pago === "Efectivo")
+    .reduce((sum, s) => sum + Number(s.total_venta), 0);
+
+  const total_bold = sales
+    .filter(s => s.metodo_pago === "Bold")
+    .reduce((sum, s) => sum + Number(s.total_venta), 0);
+
+  const total_nequi = sales
+    .filter(s => s.metodo_pago === "Nequi")
+    .reduce((sum, s) => sum + Number(s.total_venta), 0);
+
+  return { 
+    total_dia, 
+    ganancia_dia, 
+    ventas_count,
+    total_efectivo,
+    total_bold,
+    total_nequi
+  };
 };
 
 export const fetchCalendarData = async (year: number) => {
@@ -315,7 +330,7 @@ export const fetchSoldItems = async (dateStr: string) => {
   // 1. Fetch sales on this day
   const { data: sales, error: salesError } = await supabase
     .from("ventas")
-    .select("id")
+    .select("id, metodo_pago")
     .gte("fecha", startOfDay.toISOString())
     .lte("fecha", endOfDay.toISOString());
 
@@ -323,32 +338,28 @@ export const fetchSoldItems = async (dateStr: string) => {
   if (!sales || sales.length === 0) return [];
 
   const saleIds = sales.map(s => s.id);
+  const saleMethodMap = sales.reduce((acc: any, s: any) => {
+    acc[s.id] = s.metodo_pago || "Efectivo";
+    return acc;
+  }, {});
 
   // 2. Fetch items for these sales
   const { data: items, error: itemsError } = await supabase
     .from("venta_items")
-    .select("product_barcode, cantidad, precio_unitario, productos(nombre)")
+    .select("product_barcode, cantidad, precio_unitario, productos(nombre), sale_id")
     .in("sale_id", saleIds);
 
   if (itemsError) throw itemsError;
 
-  // 3. Group by product
-  const grouped: { [barcode: string]: { nombre: string; total_cantidad: number; total_venta: number } } = {};
-
-  (items || []).forEach(item => {
-    const barcode = item.product_barcode || "unknown";
-    const nombre = item.productos?.nombre || "Producto eliminado";
-    const cantidad = Number(item.cantidad);
-    const total_venta = Number(item.cantidad) * Number(item.precio_unitario);
-
-    if (!grouped[barcode]) {
-      grouped[barcode] = { nombre, total_cantidad: 0, total_venta: 0 };
-    }
-    grouped[barcode].total_cantidad += cantidad;
-    grouped[barcode].total_venta += total_venta;
-  });
-
-  return Object.values(grouped).sort((a, b) => b.total_cantidad - a.total_cantidad);
+  // Return all raw sold item details
+  return (items || []).map(item => ({
+    barcode: item.product_barcode,
+    nombre: item.productos?.nombre || "Producto eliminado",
+    cantidad: Number(item.cantidad),
+    precio_unitario: Number(item.precio_unitario),
+    total_venta: Number(item.cantidad) * Number(item.precio_unitario),
+    metodo_pago: saleMethodMap[item.sale_id] || "Efectivo"
+  }));
 };
 
 export const closeDay = async () => {

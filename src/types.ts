@@ -45,4 +45,7 @@ export interface DailyReport {
   total_dia: number;
   ganancia_dia: number;
   ventas_count: number;
+  total_efectivo?: number;
+  total_bold?: number;
+  total_nequi?: number;
 }
