@@ -15,165 +15,125 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
   const [lastResult, setLastResult] = useState<string | null>(null);
   const [manualCode, setManualCode] = useState("");
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
-  const scanLoopRef = useRef<any>(null);
 
-  // Initialize Html5Qrcode scanner using a hidden dummy container for decoding
+  // Ensure active camera stream is stopped if the user leaves the page
   useEffect(() => {
-    const dummyDiv = document.createElement("div");
-    dummyDiv.id = "dummy-reader";
-    dummyDiv.style.display = "none";
-    document.body.appendChild(dummyDiv);
-
-    try {
-      html5QrCodeRef.current = new Html5Qrcode("dummy-reader");
-    } catch (e) {
-      console.error("Failed to initialize dummy Html5Qrcode container:", e);
-    }
-
     return () => {
-      document.body.removeChild(dummyDiv);
       if (html5QrCodeRef.current) {
-        html5QrCodeRef.current = null;
-      }
-      if (scanLoopRef.current) {
-        clearTimeout(scanLoopRef.current);
-      }
-    };
-  }, []);
-
-  // Cleanup active camera streams when unmounting the component
-  useEffect(() => {
-    return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-      }
-    };
-  }, []);
-
-  const scanFrame = () => {
-    if (!isScanning || !videoRef.current || !canvasRef.current || !html5QrCodeRef.current) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-
-    // Check if the video stream contains valid playing frame data
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext("2d");
-
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        // Convert the canvas frame to jpeg blob with slight compression to speed up scanning
-        canvas.toBlob((blob) => {
-          if (blob && isScanning) {
-            html5QrCodeRef.current?.scanFile(blob, false)
-              .then((decodedText) => {
-                setLastResult(decodedText);
-                setIsScanning(false);
-
-                // Beep audio success feedback
-                try {
-                  const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-                  const osc = context.createOscillator();
-                  const gain = context.createGain();
-                  osc.connect(gain);
-                  gain.connect(context.destination);
-                  osc.frequency.setValueAtTime(880, context.currentTime);
-                  gain.gain.setValueAtTime(0.1, context.currentTime);
-                  gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.1);
-                  osc.start();
-                  osc.stop(context.currentTime + 0.1);
-                } catch (e) {}
-
-                // Immediately stop hardware stream to turn off the mobile's camera light
-                if (streamRef.current) {
-                  streamRef.current.getTracks().forEach(track => track.stop());
-                  streamRef.current = null;
-                }
-
-                setTimeout(() => {
-                  onScanSuccess(decodedText);
-                }, 1000);
-              })
-              .catch(() => {
-                // Barcode not found in this frame, loop again after 300ms
-                if (isScanning) {
-                  scanLoopRef.current = setTimeout(scanFrame, 300);
-                }
-              });
-          } else if (isScanning) {
-            scanLoopRef.current = setTimeout(scanFrame, 300);
-          }
-        }, "image/jpeg", 0.7);
-      } else if (isScanning) {
-        scanLoopRef.current = setTimeout(scanFrame, 300);
-      }
-    } else if (isScanning) {
-      // Video not fully loaded yet, retry in 150ms
-      scanLoopRef.current = setTimeout(scanFrame, 150);
-    }
-  };
-
-  const startCameraScan = async () => {
-    setErrorMessage(null);
-    setIsLoading(true);
-
-    let stream: MediaStream | null = null;
-
-    try {
-      // PLAN A: Forzar Cámara Trasera usando constraints rigurosos { exact: "environment" }
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { exact: "environment" } }
-      });
-    } catch (err1) {
-      console.warn("PLAN A failed (exact camera environment), trying PLAN B (fallback environment)...", err1);
-      try {
-        // PLAN B: Reintentar con preferencia "environment" (ideal para PC con cámaras secundarias o teléfonos)
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" }
-        });
-      } catch (err2) {
-        console.warn("PLAN B failed, trying PLAN C (any available camera)...", err2);
-        try {
-          // PLAN C: Intentar con cualquier cámara de video disponible en el equipo
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: true
-          });
-        } catch (err3: any) {
-          console.error("All camera stream attempts failed:", err3);
-          if (err3.name === "NotAllowedError" || err3.message?.includes("Permission denied")) {
-            setErrorMessage("Por favor, permite el acceso a la cámara para poder escanear los productos de la fiesta.");
-          } else {
-            setErrorMessage(`No se pudo acceder a la cámara: ${err3.message || err3}`);
-          }
-          setIsLoading(false);
-          return;
+        const scanner = html5QrCodeRef.current;
+        if (scanner.isScanning) {
+          scanner.stop().catch(err => console.error("Unmount scanner cleanup failed:", err));
         }
       }
-    }
+    };
+  }, []);
 
-    if (stream) {
-      streamRef.current = stream;
-      setIsScanning(true);
+  const startCameraScan = async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    setIsScanning(true);
+
+    try {
+      // 1. Instanciar la librería directamente sobre el div persistente del DOM
+      const html5QrCode = new Html5Qrcode("reader");
+      html5QrCodeRef.current = html5QrCode;
+
+      const qrCodeSuccessCallback = (decodedText: string) => {
+        setLastResult(decodedText);
+        setIsScanning(false);
+
+        // Sonido de éxito (beep)
+        try {
+          const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const osc = context.createOscillator();
+          const gain = context.createGain();
+          osc.connect(gain);
+          gain.connect(context.destination);
+          osc.frequency.setValueAtTime(880, context.currentTime);
+          gain.gain.setValueAtTime(0.1, context.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.1);
+          osc.start();
+          osc.stop(context.currentTime + 0.1);
+        } catch (e) {}
+
+        // Detener cámara en el éxito
+        html5QrCode.stop()
+          .then(() => {
+            setTimeout(() => {
+              onScanSuccess(decodedText);
+            }, 1000);
+          })
+          .catch((err) => {
+            console.error("Error stopping scanner after success:", err);
+            onScanSuccess(decodedText);
+          });
+      };
+
+      const config = {
+        fps: 30,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0
+      };
+
+      try {
+        // PLAN A: Forzar cámara trasera con constraints estrictos
+        await html5QrCode.start(
+          { facingMode: { exact: "environment" } },
+          config,
+          qrCodeSuccessCallback,
+          () => {}
+        );
+        setIsLoading(false);
+      } catch (err1) {
+        console.warn("PLAN A failed, trying PLAN B...", err1);
+        try {
+          // PLAN B: Cámara trasera preferente (ideal para PCs y móviles flexibles)
+          await html5QrCode.start(
+            { facingMode: "environment" },
+            config,
+            qrCodeSuccessCallback,
+            () => {}
+          );
+          setIsLoading(false);
+        } catch (err2) {
+          console.warn("PLAN B failed, trying PLAN C...", err2);
+          try {
+            // PLAN C: Cualquier sensor de cámara disponible en el equipo
+            await html5QrCode.start(
+              { facingMode: "user" },
+              config,
+              qrCodeSuccessCallback,
+              () => {}
+            );
+            setIsLoading(false);
+          } catch (err3: any) {
+            console.error("All camera start options failed:", err3);
+            setIsScanning(false);
+            setIsLoading(false);
+            if (err3.name === "NotAllowedError" || err3.message?.includes("Permission denied")) {
+              setErrorMessage("Por favor, permite el acceso a la cámara para poder escanear los productos de la fiesta.");
+            } else {
+              setErrorMessage(`No se pudo acceder a la cámara: ${err3.message || err3}`);
+            }
+          }
+        }
+      }
+    } catch (errInit: any) {
+      console.error("Error initializing Html5Qrcode:", errInit);
+      setIsScanning(false);
       setIsLoading(false);
+      setErrorMessage(`Fallo de inicio: ${errInit.message || errInit}`);
     }
   };
 
   const stopScanning = () => {
     setIsScanning(false);
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    if (scanLoopRef.current) {
-      clearTimeout(scanLoopRef.current);
+    if (html5QrCodeRef.current) {
+      const scanner = html5QrCodeRef.current;
+      if (scanner.isScanning) {
+        scanner.stop().catch(err => console.error("Error stopping camera manually:", err));
+      }
     }
   };
 
@@ -261,56 +221,12 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
             </motion.div>
           )}
 
-          {isScanning && (
-            <motion.div
-              key="scanning"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 z-10 bg-black flex flex-col justify-center items-center"
-            >
-              {/* React callback-ref to bind stream and start scanning dynamically the exact millisecond it is mounted */}
-              <video
-                ref={(el) => {
-                  if (el) {
-                    videoRef.current = el;
-                    if (streamRef.current && el.srcObject !== streamRef.current) {
-                      el.srcObject = streamRef.current;
-                      if (scanLoopRef.current) {
-                        clearTimeout(scanLoopRef.current);
-                      }
-                      scanLoopRef.current = setTimeout(scanFrame, 100);
-                    }
-                  }
-                }}
-                playsInline={true}
-                autoPlay={true}
-                muted={true}
-                className="w-full h-full object-cover"
-              />
-              <canvas ref={canvasRef} className="hidden" />
-
-              <button
-                onClick={stopScanning}
-                className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl backdrop-blur-md transition-all z-20"
-              >
-                <X size={24} />
-              </button>
-              
-              <div className="absolute bottom-8 left-0 right-0 text-center z-20">
-                <p className="text-white font-bold text-xs uppercase tracking-widest bg-black/40 inline-block px-4 py-2 rounded-full backdrop-blur-md">
-                  Apunta al Código de Barras
-                </p>
-              </div>
-            </motion.div>
-          )}
-
           {lastResult && (
             <motion.div
               key="success"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center space-y-6 text-center"
+              className="flex flex-col items-center space-y-6 text-center z-10"
             >
               <div className="w-24 h-24 bg-brand-lime rounded-full flex items-center justify-center text-brand-forest shadow-xl shadow-brand-lime/30">
                 <CheckCircle2 size={48} />
@@ -325,6 +241,29 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Viewfinder element strictly in DOM all times, with transitions controlled via Tailwind */}
+        <div
+          className={cn(
+            "absolute inset-0 bg-black flex flex-col justify-center items-center transition-all duration-300 z-20",
+            isScanning ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+          )}
+        >
+          <div id="reader" className="w-full h-full" />
+          
+          <button
+            onClick={stopScanning}
+            className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl backdrop-blur-md transition-all z-30"
+          >
+            <X size={24} />
+          </button>
+          
+          <div className="absolute bottom-8 left-0 right-0 text-center z-30">
+            <p className="text-white font-bold text-xs uppercase tracking-widest bg-black/40 inline-block px-4 py-2 rounded-full backdrop-blur-md">
+              Apunta al Código de Barras
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-md">
