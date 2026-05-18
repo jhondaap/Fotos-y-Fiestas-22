@@ -17,7 +17,25 @@ export default function Pos({ user }: PosProps) {
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [metodoPago, setMetodoPago] = useState<"Efectivo" | "Bold" | "Nequi">("Efectivo");
+  const [pagoCon, setPagoCon] = useState<string>("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const total = useMemo(() => cart.reduce((sum, item) => sum + ((item.precio || 0) * (item.cantidad || 0)), 0), [cart]);
+
+  const vuelto = useMemo(() => {
+    if (metodoPago !== "Efectivo") return 0;
+    const paidAmount = Number(pagoCon) || 0;
+    return Math.max(0, paidAmount - total);
+  }, [metodoPago, pagoCon, total]);
+
+  const isPaymentInsufficient = useMemo(() => {
+    if (metodoPago !== "Efectivo") return false;
+    if (cart.length === 0) return false;
+    if (!pagoCon) return false; // Si está vacío se asume pago exacto
+    const paidAmount = Number(pagoCon) || 0;
+    return paidAmount < total;
+  }, [metodoPago, pagoCon, total, cart]);
 
   useEffect(() => {
     fetchData();
@@ -113,10 +131,11 @@ export default function Pos({ user }: PosProps) {
     setCart(prev => prev.filter(item => item.id !== id));
   };
 
-  const total = useMemo(() => cart.reduce((sum, item) => sum + ((item.precio || 0) * (item.cantidad || 0)), 0), [cart]);
+
 
   const handleFinalize = async () => {
     if (cart.length === 0) return;
+    if (isPaymentInsufficient) return;
     setIsLoading(true);
 
     try {
@@ -131,10 +150,14 @@ export default function Pos({ user }: PosProps) {
         items: cart,
         total_venta: total,
         ganancia_total,
-        usuario_id: user.id
+        usuario_id: user.id,
+        metodo_pago: metodoPago,
+        pago_con: metodoPago === "Efectivo" ? (Number(pagoCon) || total) : total
       });
 
       setCart([]);
+      setPagoCon("");
+      setMetodoPago("Efectivo");
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
       fetchData(); // Refresh stocks
@@ -314,10 +337,64 @@ export default function Pos({ user }: PosProps) {
           )}
         </div>
 
-        <div className="p-6 bg-slate-50/50 space-y-4">
-          <div className="flex justify-between items-end mb-2">
+        <div className="p-6 bg-slate-50/50 space-y-5 border-t border-slate-100">
+          {/* Payment Method Selector */}
+          {cart.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block">Método de Pago</label>
+              <select
+                value={metodoPago}
+                onChange={(e) => {
+                  const val = e.target.value as "Efectivo" | "Bold" | "Nequi";
+                  setMetodoPago(val);
+                  if (val !== "Efectivo") setPagoCon("");
+                }}
+                className="w-full bg-white border border-slate-200 rounded-2xl p-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-brand-lime/50 focus:border-brand-lime transition-all cursor-pointer shadow-sm hover:border-slate-300"
+              >
+                <option value="Efectivo">💵 Efectivo</option>
+                <option value="Bold">💳 Bold</option>
+                <option value="Nequi">📱 Nequi</option>
+              </select>
+            </div>
+          )}
+
+          {/* Conditional Cash Calculation Inputs */}
+          {cart.length > 0 && metodoPago === "Efectivo" && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5 block">
+                  ¿Con cuánto paga el cliente?
+                </label>
+                <input
+                  type="number"
+                  placeholder={`Ej: ${total}`}
+                  value={pagoCon}
+                  onChange={(e) => setPagoCon(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-2xl p-3.5 text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-brand-lime/50 focus:border-brand-lime transition-all"
+                />
+              </div>
+              <div>
+                <div className={cn(
+                  "p-3.5 rounded-2xl text-xs font-black tracking-wide text-center border transition-all",
+                  isPaymentInsufficient
+                    ? "bg-red-50 border-red-100 text-red-500"
+                    : "bg-brand-lime/10 border-brand-lime/20 text-brand-forest"
+                )}>
+                  {isPaymentInsufficient 
+                    ? "⚠️ Monto Insuficiente" 
+                    : `Cambio a devolver: ${formatCurrency(vuelto)}`}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          <div className="flex justify-between items-end pt-1">
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-2">Total a Pagar</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">Total a Pagar</p>
               <h3 className="text-4xl font-black text-brand-forest tracking-tighter leading-none">
                 {formatCurrency(total || 0)}
               </h3>
@@ -326,10 +403,10 @@ export default function Pos({ user }: PosProps) {
           
           <button
             onClick={handleFinalize}
-            disabled={cart.length === 0 || isLoading}
+            disabled={cart.length === 0 || isLoading || isPaymentInsufficient}
             className={cn(
               "w-full py-4 rounded-2xl font-black text-lg shadow-lg flex items-center justify-center gap-3 transition-all active:scale-95",
-              cart.length === 0 || isLoading
+              cart.length === 0 || isLoading || isPaymentInsufficient
                 ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
                 : "bg-brand-lime hover:bg-[#7DFA7D] text-brand-forest shadow-brand-lime/40"
             )}

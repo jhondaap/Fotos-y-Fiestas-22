@@ -171,6 +171,8 @@ export const createSale = async (sale: {
   total_venta: number;
   ganancia_total: number;
   usuario_id: number;
+  metodo_pago: string;
+  pago_con?: number;
 }) => {
   // 1. Insert into ventas
   const { data: saleData, error: saleError } = await supabase
@@ -180,7 +182,9 @@ export const createSale = async (sale: {
         total_venta: sale.total_venta,
         ganancia_total: sale.ganancia_total,
         usuario_id: sale.usuario_id,
-        cerrado: false
+        cerrado: false,
+        metodo_pago: sale.metodo_pago,
+        pago_con: sale.pago_con
       }
     ])
     .select("id")
