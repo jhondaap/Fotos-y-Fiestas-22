@@ -64,8 +64,12 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
     }
   }, [isModalOpen]);
 
+  // 1. Abre el modal de Registro/Edición de forma totalmente instantánea al detectar el escaneo
   useEffect(() => {
-    if (initialScannedCode && products.length > 0) {
+    if (initialScannedCode) {
+      setIsModalOpen(true);
+      
+      // Busca si el producto ya existe en el listado cargado actualmente
       const existingProduct = products.find(p => p.barcode === initialScannedCode);
       if (existingProduct) {
         setEditingProduct(existingProduct);
@@ -76,14 +80,30 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
           costo: 0, 
           stock_actual: 0, 
           stock_minimo: 2, 
-          categoria_id: categories[0]?.id, 
+          categoria_id: categories.length > 0 ? categories[0].id : undefined, 
           barcode: initialScannedCode 
         });
       }
-      setIsModalOpen(true);
       onClearScannedCode?.();
     }
-  }, [initialScannedCode, products, categories, onClearScannedCode]);
+  }, [initialScannedCode]);
+
+  // 2. Sincroniza en segundo plano los datos si la consulta de productos de Supabase termina después de abrir el modal
+  useEffect(() => {
+    if (isModalOpen && editingProduct && !editingProduct.id && editingProduct.barcode && products.length > 0) {
+      const match = products.find(p => p.barcode === editingProduct.barcode);
+      if (match) {
+        setEditingProduct(match);
+      }
+    }
+  }, [products, isModalOpen, editingProduct]);
+
+  // 3. Sincroniza la primera categoría disponible por defecto en cuanto la lista de categorías finalice su descarga
+  useEffect(() => {
+    if (isModalOpen && editingProduct && editingProduct.categoria_id === undefined && categories.length > 0) {
+      setEditingProduct(prev => prev ? { ...prev, categoria_id: categories[0].id } : null);
+    }
+  }, [categories, isModalOpen, editingProduct]);
 
   const fetchData = async () => {
     try {

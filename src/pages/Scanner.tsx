@@ -163,15 +163,6 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
       streamRef.current = stream;
       setIsScanning(true);
       setIsLoading(false);
-
-      // Brief delay to ensure video element is fully mounted by React before binding srcObject
-      setTimeout(() => {
-        if (videoRef.current && stream) {
-          videoRef.current.srcObject = stream;
-          // Start the snapshot-based frame scan loop
-          scanLoopRef.current = setTimeout(scanFrame, 400);
-        }
-      }, 150);
     }
   };
 
@@ -278,9 +269,20 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
               exit={{ opacity: 0 }}
               className="absolute inset-0 z-10 bg-black flex flex-col justify-center items-center"
             >
-              {/* Viewfinder video element directly in DOM with custom cross-platform optimization settings */}
+              {/* React callback-ref to bind stream and start scanning dynamically the exact millisecond it is mounted */}
               <video
-                ref={videoRef}
+                ref={(el) => {
+                  if (el) {
+                    videoRef.current = el;
+                    if (streamRef.current && el.srcObject !== streamRef.current) {
+                      el.srcObject = streamRef.current;
+                      if (scanLoopRef.current) {
+                        clearTimeout(scanLoopRef.current);
+                      }
+                      scanLoopRef.current = setTimeout(scanFrame, 100);
+                    }
+                  }
+                }}
                 playsInline={true}
                 autoPlay={true}
                 muted={true}
