@@ -15,125 +15,175 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
   const [lastResult, setLastResult] = useState<string | null>(null);
   const [manualCode, setManualCode] = useState("");
 
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  const scanLoopRef = useRef<any>(null);
+
+  // Initialize Html5Qrcode scanner using a hidden dummy container for decoding
+  useEffect(() => {
+    const dummyDiv = document.createElement("div");
+    dummyDiv.id = "dummy-reader";
+    dummyDiv.style.display = "none";
+    document.body.appendChild(dummyDiv);
+
+    try {
+      html5QrCodeRef.current = new Html5Qrcode("dummy-reader");
+    } catch (e) {
+      console.error("Failed to initialize dummy Html5Qrcode container:", e);
+    }
+
+    return () => {
+      document.body.removeChild(dummyDiv);
+      if (html5QrCodeRef.current) {
+        html5QrCodeRef.current = null;
+      }
+      if (scanLoopRef.current) {
+        clearTimeout(scanLoopRef.current);
+      }
+    };
+  }, []);
+
+  // Cleanup active camera streams when unmounting the component
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
+
+  const scanFrame = () => {
+    if (!isScanning || !videoRef.current || !canvasRef.current || !html5QrCodeRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    // Check if the video stream contains valid playing frame data
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Convert the canvas frame to jpeg blob with slight compression to speed up scanning
+        canvas.toBlob((blob) => {
+          if (blob && isScanning) {
+            html5QrCodeRef.current?.scanFile(blob, false)
+              .then((decodedText) => {
+                setLastResult(decodedText);
+                setIsScanning(false);
+
+                // Beep audio success feedback
+                try {
+                  const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+                  const osc = context.createOscillator();
+                  const gain = context.createGain();
+                  osc.connect(gain);
+                  gain.connect(context.destination);
+                  osc.frequency.setValueAtTime(880, context.currentTime);
+                  gain.gain.setValueAtTime(0.1, context.currentTime);
+                  gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.1);
+                  osc.start();
+                  osc.stop(context.currentTime + 0.1);
+                } catch (e) {}
+
+                // Immediately stop hardware stream to turn off the mobile's camera light
+                if (streamRef.current) {
+                  streamRef.current.getTracks().forEach(track => track.stop());
+                  streamRef.current = null;
+                }
+
+                setTimeout(() => {
+                  onScanSuccess(decodedText);
+                }, 1000);
+              })
+              .catch(() => {
+                // Barcode not found in this frame, loop again after 300ms
+                if (isScanning) {
+                  scanLoopRef.current = setTimeout(scanFrame, 300);
+                }
+              });
+          } else if (isScanning) {
+            scanLoopRef.current = setTimeout(scanFrame, 300);
+          }
+        }, "image/jpeg", 0.7);
+      } else if (isScanning) {
+        scanLoopRef.current = setTimeout(scanFrame, 300);
+      }
+    } else if (isScanning) {
+      // Video not fully loaded yet, retry in 150ms
+      scanLoopRef.current = setTimeout(scanFrame, 150);
+    }
+  };
+
   const startCameraScan = async () => {
     setErrorMessage(null);
     setIsLoading(true);
 
-    try {
-      // 1. Disparar la solicitud nativa para obligar a Google Chrome a pedir permisos de inmediato
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      
-      // 3. Apagar el flujo inicial de prueba de inmediato para que la cámara no se quede bloqueada
-      stream.getTracks().forEach(track => track.stop());
+    let stream: MediaStream | null = null;
 
-      // 2. Arrancar el lector tras el permiso exitoso
-      setIsScanning(true);
-    } catch (err: any) {
-      console.error("Camera permission denied natively:", err);
-      // 4. Captura de denegación
-      if (err.name === "NotAllowedError" || err.message?.includes("Permission denied")) {
-        setErrorMessage("Por favor, permite el acceso a la cámara para poder escanear los productos de la fiesta.");
-      } else {
-        setErrorMessage(`Fallo al acceder a la cámara: ${err.message || err}`);
+    try {
+      // PLAN A: Forzar Cámara Trasera usando constraints rigurosos { exact: "environment" }
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { exact: "environment" } }
+      });
+    } catch (err1) {
+      console.warn("PLAN A failed (exact camera environment), trying PLAN B (fallback environment)...", err1);
+      try {
+        // PLAN B: Reintentar con preferencia "environment" (ideal para PC con cámaras secundarias o teléfonos)
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" }
+        });
+      } catch (err2) {
+        console.warn("PLAN B failed, trying PLAN C (any available camera)...", err2);
+        try {
+          // PLAN C: Intentar con cualquier cámara de video disponible en el equipo
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true
+          });
+        } catch (err3: any) {
+          console.error("All camera stream attempts failed:", err3);
+          if (err3.name === "NotAllowedError" || err3.message?.includes("Permission denied")) {
+            setErrorMessage("Por favor, permite el acceso a la cámara para poder escanear los productos de la fiesta.");
+          } else {
+            setErrorMessage(`No se pudo acceder a la cámara: ${err3.message || err3}`);
+          }
+          setIsLoading(false);
+          return;
+        }
       }
-    } finally {
+    }
+
+    if (stream) {
+      streamRef.current = stream;
+      setIsScanning(true);
       setIsLoading(false);
+
+      // Brief delay to ensure video element is fully mounted by React before binding srcObject
+      setTimeout(() => {
+        if (videoRef.current && stream) {
+          videoRef.current.srcObject = stream;
+          // Start the snapshot-based frame scan loop
+          scanLoopRef.current = setTimeout(scanFrame, 400);
+        }
+      }, 150);
     }
   };
 
-  useEffect(() => {
-    let html5QrCode: Html5Qrcode | null = null;
-    let isActive = true;
-
-    if (isScanning) {
-      // Small delay to guarantee that the DOM element "reader" is mounted by React
-      const timer = setTimeout(() => {
-        const element = document.getElementById("reader");
-        if (!element || !isActive) return;
-
-        try {
-          html5QrCode = new Html5Qrcode("reader");
-
-          // Start scanning directly using optimal back-camera constraints
-          html5QrCode.start(
-            { facingMode: "environment" },
-            { 
-              fps: 30, 
-              qrbox: { width: 250, height: 250 },
-              aspectRatio: 1.0
-            },
-            (decodedText) => {
-              if (!isActive) return;
-              setLastResult(decodedText);
-              setIsScanning(false);
-              
-              // Success beep sound
-              try {
-                const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-                const osc = context.createOscillator();
-                const gain = context.createGain();
-                osc.connect(gain);
-                gain.connect(context.destination);
-                osc.frequency.setValueAtTime(880, context.currentTime);
-                gain.gain.setValueAtTime(0.1, context.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.1);
-                osc.start();
-                osc.stop(context.currentTime + 0.1);
-              } catch (e) {}
-
-              // Stop video flow on success
-              html5QrCode?.stop()
-                .then(() => {
-                  setTimeout(() => {
-                    onScanSuccess(decodedText);
-                  }, 1000);
-                })
-                .catch((err) => {
-                  console.error("Error stopping scanner after success:", err);
-                  onScanSuccess(decodedText);
-                });
-            },
-            () => {
-              // Frame scanner warnings are ignored
-            }
-          )
-          .catch((err) => {
-            console.error("Error starting Html5Qrcode stream:", err);
-            if (isActive) {
-              setErrorMessage("No se pudo iniciar el escáner. Asegúrese de que no esté en uso por otra pestaña y que esté usando una conexión segura.");
-              setIsScanning(false);
-            }
-          });
-        } catch (e: any) {
-          console.error("Failed to initialize Html5Qrcode library:", e);
-          if (isActive) {
-            setErrorMessage(`Error del lector: ${e.message || e}`);
-            setIsScanning(false);
-          }
-        }
-      }, 150);
-
-      return () => {
-        isActive = false;
-        clearTimeout(timer);
-        if (html5QrCode) {
-          const checkAndStop = async () => {
-            try {
-              if (html5QrCode?.isScanning) {
-                await html5QrCode.stop();
-              }
-            } catch (err) {
-              console.error("Error stopping scanner during cleanup:", err);
-            }
-          };
-          checkAndStop();
-        }
-      };
-    }
-  }, [isScanning, onScanSuccess]);
-
   const stopScanning = () => {
     setIsScanning(false);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (scanLoopRef.current) {
+      clearTimeout(scanLoopRef.current);
+    }
   };
 
   const handleManualSubmit = (e: React.FormEvent) => {
@@ -226,15 +276,25 @@ export default function Scanner({ onScanSuccess }: ScannerProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 z-10 bg-black flex flex-col"
+              className="absolute inset-0 z-10 bg-black flex flex-col justify-center items-center"
             >
-              <div id="reader" className="w-full flex-1" />
+              {/* Viewfinder video element directly in DOM with custom cross-platform optimization settings */}
+              <video
+                ref={videoRef}
+                playsInline={true}
+                autoPlay={true}
+                muted={true}
+                className="w-full h-full object-cover"
+              />
+              <canvas ref={canvasRef} className="hidden" />
+
               <button
                 onClick={stopScanning}
                 className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl backdrop-blur-md transition-all z-20"
               >
                 <X size={24} />
               </button>
+              
               <div className="absolute bottom-8 left-0 right-0 text-center z-20">
                 <p className="text-white font-bold text-xs uppercase tracking-widest bg-black/40 inline-block px-4 py-2 rounded-full backdrop-blur-md">
                   Apunta al Código de Barras
