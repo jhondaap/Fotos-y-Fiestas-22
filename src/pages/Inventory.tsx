@@ -17,7 +17,9 @@ import {
   Scan,
   Loader2,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  ChevronUp,
+  ChevronDown
 } from "lucide-react";
 import { formatCurrency, cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
@@ -210,6 +212,35 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
     }
   };
 
+  const handleUpdateStock = async (product: Product, delta: number) => {
+    const newStock = Math.max(0, product.stock_actual + delta);
+    if (newStock === product.stock_actual) return;
+
+    // 1. Optimistic UI update
+    setProducts(prevProducts => 
+      prevProducts.map(p => 
+        p.id === product.id ? { ...p, stock_actual: newStock } : p
+      )
+    );
+
+    // 2. Persist to database in background
+    try {
+      await updateProduct(String(product.id), {
+        ...product,
+        stock_actual: newStock
+      });
+    } catch (error) {
+      console.error("Error updating stock:", error);
+      // Revert on error
+      setProducts(prevProducts => 
+        prevProducts.map(p => 
+          p.id === product.id ? { ...p, stock_actual: product.stock_actual } : p
+        )
+      );
+      alert("Error al actualizar el stock");
+    }
+  };
+
   const totalInventoryValue = products.reduce((sum, p) => sum + (p.precio * p.stock_actual), 0);
   const totalCostValue = products.reduce((sum, p) => sum + (p.costo * p.stock_actual), 0);
 
@@ -351,18 +382,44 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
                     </span>
                   </td>
                   <td className="px-6 py-5">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       <span className={cn(
-                        "font-bold text-lg",
+                        "font-bold text-lg min-w-[20px] text-center",
                         p.stock_actual <= p.stock_minimo ? "text-red-500" : "text-slate-700"
                       )}>
                         {p.stock_actual}
                       </span>
+                      
+                      <div className="flex flex-col">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUpdateStock(p, 1);
+                          }}
+                          className="p-0.5 hover:bg-slate-100 rounded-md text-slate-400 hover:text-brand-forest hover:bg-brand-lime/20 transition-all active:scale-90"
+                          title="Incrementar Stock"
+                        >
+                          <ChevronUp size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUpdateStock(p, -1);
+                          }}
+                          className="p-0.5 hover:bg-slate-100 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all active:scale-90"
+                          title="Decrementar Stock"
+                        >
+                          <ChevronDown size={16} />
+                        </button>
+                      </div>
+
                       {p.stock_actual <= p.stock_minimo && (
-                        <AlertTriangle size={16} className="text-red-500" />
+                        <AlertTriangle size={16} className="text-red-500 animate-pulse ml-0.5" />
                       )}
                     </div>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Min: {p.stock_minimo}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter mt-0.5">Min: {p.stock_minimo}</p>
                   </td>
                   <td className="px-6 py-5 text-right font-black text-slate-800">
                     {formatCurrency(p.precio || 0)}
