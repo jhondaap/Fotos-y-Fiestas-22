@@ -243,16 +243,9 @@ export const fetchDailyReport = async (dateStr: string): Promise<DailyReport> =>
 
   if (error) throw error;
 
-  const targetDateStr = new Date(dateStr).toISOString().split('T')[0];
-  const dailySales = (data || []).filter((s: any) => {
-    return true;
-  });
-
-  // Let's implement robust date filtering:
-  const startOfDay = new Date(dateStr);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(dateStr);
-  endOfDay.setHours(23, 59, 59, 999);
+  const parts = dateStr.split('-');
+  const startOfDay = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0, 0);
+  const endOfDay = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59, 999);
 
   const { data: filteredData, error: filterError } = await supabase
     .from("ventas")
@@ -302,16 +295,20 @@ export const fetchCalendarData = async (year: number) => {
 
   if (error) throw error;
 
-  // Group by day and month
+  // Group by day and month using local timezone
   const dailyMap: { [date: string]: number } = {};
   const monthlyMap: { [month: string]: number } = {};
 
   (data || []).forEach(v => {
     const d = new Date(v.fecha);
-    const dateStr = d.toISOString().split('T')[0];
+    const localYear = d.getFullYear();
+    const localMonth = (d.getMonth() + 1).toString().padStart(2, '0');
+    const localDay = d.getDate().toString().padStart(2, '0');
+    
+    const dateStr = `${localYear}-${localMonth}-${localDay}`;
     dailyMap[dateStr] = (dailyMap[dateStr] || 0) + Number(v.total_venta);
 
-    const monthStr = (d.getMonth() + 1).toString().padStart(2, '0');
+    const monthStr = localMonth;
     monthlyMap[monthStr] = (monthlyMap[monthStr] || 0) + Number(v.total_venta);
   });
 
@@ -322,10 +319,9 @@ export const fetchCalendarData = async (year: number) => {
 };
 
 export const fetchSoldItems = async (dateStr: string) => {
-  const startOfDay = new Date(dateStr);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(dateStr);
-  endOfDay.setHours(23, 59, 59, 999);
+  const parts = dateStr.split('-');
+  const startOfDay = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0, 0);
+  const endOfDay = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59, 999);
 
   // 1. Fetch sales on this day
   const { data: sales, error: salesError } = await supabase
@@ -363,15 +359,19 @@ export const fetchSoldItems = async (dateStr: string) => {
 };
 
 export const closeDay = async () => {
-  const today = new Date().toISOString().split('T')[0];
-  const startOfDay = `${today}T00:00:00.000Z`;
-  const endOfDay = `${today}T23:59:59.999Z`;
+  const d = new Date();
+  const localYear = d.getFullYear();
+  const localMonth = d.getMonth();
+  const localDay = d.getDate();
+
+  const startOfDay = new Date(localYear, localMonth, localDay, 0, 0, 0, 0);
+  const endOfDay = new Date(localYear, localMonth, localDay, 23, 59, 59, 999);
 
   const { error } = await supabase
     .from("ventas")
     .update({ cerrado: true })
-    .gte("fecha", startOfDay)
-    .lte("fecha", endOfDay)
+    .gte("fecha", startOfDay.toISOString())
+    .lte("fecha", endOfDay.toISOString())
     .eq("cerrado", false);
 
   if (error) throw error;

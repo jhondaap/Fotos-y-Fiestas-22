@@ -27,6 +27,19 @@ interface CalendarData {
 }
 
 export default function Reports() {
+  const getLocalDateString = (d: Date = new Date()) => {
+    const year = d.getFullYear();
+    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatLocalDateLabel = (dateStr: string) => {
+    const parts = dateStr.split('-');
+    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
   const [report, setReport] = useState<DailyReport>({ 
     total_dia: 0, 
     ganancia_dia: 0, 
@@ -44,7 +57,7 @@ export default function Reports() {
     metodo_pago: string;
   }[]>([]);
   const [activeFilter, setActiveFilter] = useState<"Todos" | "Efectivo" | "Bold" | "Nequi">("Todos");
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(getLocalDateString());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isCloseDayOpen, setIsCloseDayOpen] = useState(false);
   const [calendarData, setCalendarData] = useState<CalendarData>({ daily: [], monthly: [] });
@@ -109,9 +122,10 @@ export default function Reports() {
   };
 
   const changeDate = (days: number) => {
-    const d = new Date(date);
+    const parts = date.split('-');
+    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
     d.setDate(d.getDate() + days);
-    setDate(d.toISOString().split('T')[0]);
+    setDate(getLocalDateString(d));
   };
 
   const handleCloseDay = async () => {
@@ -158,7 +172,7 @@ export default function Reports() {
           <div className="flex items-center gap-2 px-4">
             <Calendar size={18} className="text-slate-300" />
             <span className="font-bold text-slate-800 text-sm">
-              {new Date(date).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}
+              {formatLocalDateLabel(date)}
             </span>
           </div>
           <button 
@@ -525,15 +539,21 @@ export default function Reports() {
                       
                       const d = new Date(currentViewDate.getFullYear(), currentViewDate.getMonth(), day);
                       const dStr = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
-                      const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+                      const todayStr = new Date().toLocaleDateString('en-CA');
                       const isToday = dStr === todayStr;
                       
                       return (
                         <div 
                           key={day} 
+                          onClick={() => {
+                            if (total > 0) {
+                              setDate(dStr);
+                              setIsCalendarOpen(false);
+                            }
+                          }}
                           className={cn(
                             "aspect-square rounded-2xl flex flex-col items-center justify-center relative group overflow-hidden transition-all border",
-                            total > 0 ? "bg-white border-slate-200 shadow-sm" : "bg-slate-100/50 border-transparent opacity-40",
+                            total > 0 ? "bg-white border-slate-200 shadow-sm cursor-pointer hover:border-brand-lime" : "bg-slate-100/50 border-transparent opacity-40",
                             isToday && "border-brand-lime border-2 ring-2 ring-brand-lime/20"
                           )}
                         >
