@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Product, SaleItem, User, Category } from "../types";
-import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle2, AlertTriangle, Tag } from "lucide-react";
+import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle2, AlertTriangle, Tag, Printer } from "lucide-react";
 import { formatCurrency, cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { fetchProducts, fetchCategories, createSale } from "../lib/supabaseService";
@@ -20,6 +20,16 @@ export default function Pos({ user }: PosProps) {
   const [metodoPago, setMetodoPago] = useState<"Efectivo" | "Bold" | "Nequi">("Efectivo");
   const [pagoCon, setPagoCon] = useState<string>("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const [lastSale, setLastSale] = useState<{
+    items: SaleItem[];
+    total: number;
+    metodoPago: "Efectivo" | "Bold" | "Nequi";
+    pagoCon: string;
+    vuelto: number;
+    fecha: string;
+  } | null>(null);
+  const [showConfirmPrint, setShowConfirmPrint] = useState(false);
 
   const total = useMemo(() => cart.reduce((sum, item) => sum + ((item.precio || 0) * (item.cantidad || 0)), 0), [cart]);
 
@@ -156,11 +166,31 @@ export default function Pos({ user }: PosProps) {
         pago_con: metodoPago === "Efectivo" ? (Number(pagoCon) || total) : total
       });
 
+      const now = new Date();
+      const saleDate = now.toLocaleDateString("es-CO", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }) + " " + now.toLocaleTimeString("es-CO", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true
+      });
+
+      setLastSale({
+        items: [...cart],
+        total: total,
+        metodoPago: metodoPago,
+        pagoCon: metodoPago === "Efectivo" ? (pagoCon || String(total)) : String(total),
+        vuelto: vuelto,
+        fecha: saleDate
+      });
+
       setCart([]);
       setPagoCon("");
       setMetodoPago("Efectivo");
       setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
       fetchData(); // Refresh stocks
     } catch (err) {
       console.error(err);
@@ -443,11 +473,143 @@ export default function Pos({ user }: PosProps) {
                 <CheckCircle2 size={48} />
               </motion.div>
               <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tighter uppercase">¡VENTA EXITOSA!</h3>
-              <p className="text-slate-500 font-medium">El inventario se ha actualizado.</p>
+              <p className="text-slate-500 font-medium mb-4">El inventario se ha actualizado.</p>
+              
+              <div className="flex flex-col gap-3 w-full max-w-[240px] mt-2">
+                <button
+                  onClick={() => setShowConfirmPrint(true)}
+                  className="w-full py-3.5 bg-brand-lime text-brand-forest font-black rounded-2xl shadow-lg shadow-brand-lime/20 hover:bg-[#7DFA7D] transition-all active:scale-95 text-sm uppercase tracking-widest flex items-center justify-center gap-2 border border-brand-lime/40"
+                >
+                  <Printer size={18} strokeWidth={2.5} />
+                  Imprimir Ticket
+                </button>
+                <button
+                  onClick={() => {
+                    setShowSuccess(false);
+                    setLastSale(null);
+                  }}
+                  className="w-full py-3.5 bg-slate-100 text-slate-600 font-black rounded-2xl hover:bg-slate-200 transition-all active:scale-95 text-sm uppercase tracking-widest"
+                >
+                  Nueva Venta
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
+
+      {/* Confirmation Modal for Print */}
+      <AnimatePresence>
+        {showConfirmPrint && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[60] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-[2.5rem] border border-brand-lime/30 p-6 max-w-sm w-full shadow-2xl text-center"
+            >
+              <div className="w-16 h-16 bg-brand-lime/10 text-brand-forest rounded-full flex items-center justify-center mx-auto mb-4 border border-brand-lime/20">
+                <Printer size={32} />
+              </div>
+              <h4 className="text-xl font-black text-slate-800 mb-2">¿Imprimir comprobante?</h4>
+              <p className="text-slate-500 text-sm font-medium mb-6">
+                Se enviará el documento a la impresora de tiques configurada en el sistema.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConfirmPrint(false)}
+                  className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all text-sm uppercase tracking-widest"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    setShowConfirmPrint(false);
+                    setTimeout(() => {
+                      window.print();
+                    }, 150);
+                  }}
+                  className="flex-1 py-3.5 bg-brand-lime hover:bg-[#7DFA7D] text-brand-forest font-bold rounded-2xl transition-all text-sm uppercase tracking-widest"
+                >
+                  Confirmar Impresión
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Printable Ticket Area */}
+      {lastSale && (
+        <div id="ticket-print-area">
+          <div style={{ textAlign: "center", marginBottom: "15px" }}>
+            <h1 style={{ fontSize: "20px", fontWeight: "900", margin: "0 0 5px 0", textTransform: "uppercase" }}>Fotos y Fiestas</h1>
+            <p style={{ fontSize: "10px", margin: "2px 0", color: "#555" }}>Dirección: Carulla Guadalupe Segundo Piso - Fotos y Fiestas</p>
+            <p style={{ fontSize: "10px", margin: "2px 0", color: "#555" }}>Teléfono: 304 312 3432</p>
+            <p style={{ fontSize: "11px", margin: "5px 0 0 0", color: "#333", fontWeight: "bold" }}>Comprobante de Venta</p>
+          </div>
+
+          <div style={{ borderBottom: "1px dashed #000", paddingBottom: "8px", marginBottom: "8px", fontSize: "11px" }}>
+            <p style={{ margin: "4px 0" }}><strong>Fecha:</strong> {lastSale.fecha}</p>
+            <p style={{ margin: "4px 0" }}><strong>Método de Pago:</strong> {lastSale.metodoPago}</p>
+          </div>
+
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px", marginBottom: "8px" }}>
+            <thead>
+              <tr style={{ borderBottom: "1px dashed #000" }}>
+                <th style={{ textAlign: "left", paddingBottom: "5px", width: "10%" }}>Cant</th>
+                <th style={{ textAlign: "left", paddingBottom: "5px", width: "50%" }}>Producto</th>
+                <th style={{ textAlign: "right", paddingBottom: "5px", width: "20%" }}>Unit</th>
+                <th style={{ textAlign: "right", paddingBottom: "5px", width: "20%" }}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lastSale.items.map((item, idx) => (
+                <tr key={idx}>
+                  <td style={{ padding: "4px 0", verticalAlign: "top" }}>{item.cantidad}</td>
+                  <td style={{ padding: "4px 0", verticalAlign: "top", wordBreak: "break-word" }}>
+                    {item.nombre.length > 25 ? item.nombre.substring(0, 22) + "..." : item.nombre}
+                  </td>
+                  <td style={{ padding: "4px 0", textAlign: "right", verticalAlign: "top" }}>
+                    {formatCurrency(item.precio)}
+                  </td>
+                  <td style={{ padding: "4px 0", textAlign: "right", verticalAlign: "top" }}>
+                    {formatCurrency(item.cantidad * item.precio)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div style={{ borderTop: "1px dashed #000", paddingTop: "8px", fontSize: "11px", marginTop: "8px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "900", fontSize: "12px", margin: "4px 0" }}>
+              <span>TOTAL:</span>
+              <span>{formatCurrency(lastSale.total)}</span>
+            </div>
+            {lastSale.metodoPago === "Efective" || lastSale.metodoPago === "Efectivo" ? (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", margin: "4px 0" }}>
+                  <span>Pagó con:</span>
+                  <span>{formatCurrency(Number(lastSale.pagoCon) || lastSale.total)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", margin: "4px 0" }}>
+                  <span>Cambio:</span>
+                  <span>{formatCurrency(lastSale.vuelto)}</span>
+                </div>
+              </>
+            ) : null}
+          </div>
+
+          <div style={{ textAlign: "center", marginTop: "20px", borderTop: "1px dashed #000", paddingTop: "10px", fontSize: "11px" }}>
+            <p style={{ margin: "0", fontWeight: "bold" }}>¡Gracias por tu compra!</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

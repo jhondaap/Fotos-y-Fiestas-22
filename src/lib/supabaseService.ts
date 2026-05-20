@@ -353,7 +353,7 @@ export const fetchSoldItems = async (dateStr: string) => {
   // Return all raw sold item details
   return (items || []).map(item => ({
     barcode: item.product_barcode,
-    nombre: item.productos?.nombre || "Producto eliminado",
+    nombre: ((item.productos as any)?.nombre || (item.productos as any)?.[0]?.nombre || "Producto eliminado") as string,
     cantidad: Number(item.cantidad),
     precio_unitario: Number(item.precio_unitario),
     total_venta: Number(item.cantidad) * Number(item.precio_unitario),

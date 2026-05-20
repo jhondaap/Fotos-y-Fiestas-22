@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -38,5 +38,43 @@
   
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #cbd5e1;
+  }
+}
+
+@media print {
+  /* Hide all content on the page */
+  body * {
+    visibility: hidden;
+  }
+  
+  /* Make only the ticket print area and its contents visible */
+  #ticket-print-area, #ticket-print-area * {
+    visibility: visible !important;
+  }
+  
+  /* Position the ticket at the absolute top-left of the page */
+  #ticket-print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 80mm !important;
+    margin: 0 !important;
+    padding: 5mm !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+    font-family: monospace !important;
+  }
+  
+  /* Disable margins and headers/footers */
+  @page {
+    margin: 0 !important;
+  }
+}
+
+/* Hide print layout on screen */
+@media screen {
+  #ticket-print-area {
+    display: none !important;
   }
 }
