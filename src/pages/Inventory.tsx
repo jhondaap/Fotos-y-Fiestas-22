@@ -377,7 +377,17 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
                 <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-6 py-5">
                     <div className="font-bold text-slate-800 leading-none mb-1">{p.nombre}</div>
-                    <div className="text-[10px] text-slate-400 font-bold tracking-wider">SKU: {p.barcode || "Sin código"}</div>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-slate-400 font-bold tracking-wider">
+                      <span>SKU: {p.barcode || "Sin código"}</span>
+                      {p.descripcion && (
+                        <>
+                          <span className="text-slate-300 font-normal">•</span>
+                          <span className="text-slate-400 font-medium normal-case italic" title={p.descripcion}>
+                            {p.descripcion.length > 20 ? p.descripcion.substring(0, 20) + "..." : p.descripcion}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-5">
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-forest bg-brand-lime/20 px-2 py-1 rounded-lg uppercase tracking-wider">

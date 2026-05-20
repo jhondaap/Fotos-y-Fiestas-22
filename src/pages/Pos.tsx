@@ -249,9 +249,14 @@ export default function Pos({ user }: PosProps) {
                 <div className="bg-brand-lime/10 text-brand-forest text-[10px] font-bold px-2 py-0.5 mb-3 self-start rounded-md inline-block uppercase tracking-wider">
                   {p.nombre_categoria}
                 </div>
-                <h4 className="font-bold text-slate-800 leading-tight mb-2 flex-1">
+                <h4 className="font-bold text-slate-800 leading-tight mb-1 flex-1">
                   {p.nombre}
                 </h4>
+                {p.descripcion && (
+                  <p className="text-[11px] text-slate-400 font-medium normal-case italic mb-2 line-clamp-1" title={p.descripcion}>
+                    {p.descripcion.length > 20 ? p.descripcion.substring(0, 20) + "..." : p.descripcion}
+                  </p>
+                )}
                 <div className="flex justify-between items-end mt-3 pt-3 border-t border-slate-50">
                   <div>
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Stock</p>
