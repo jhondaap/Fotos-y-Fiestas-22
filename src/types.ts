@@ -8,6 +8,7 @@ export interface Product {
   categoria_id: number;
   nombre_categoria?: string;
   barcode?: string;
+  descripcion?: string;
 }
 
 export interface Category {

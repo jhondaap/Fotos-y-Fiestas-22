@@ -66,7 +66,8 @@ export default function Pos({ user }: PosProps) {
       result = result.filter(p => 
         p.nombre.toLowerCase().includes(lowerSearch) ||
         p.nombre_categoria?.toLowerCase().includes(lowerSearch) ||
-        p.barcode?.toLowerCase().includes(lowerSearch)
+        p.barcode?.toLowerCase().includes(lowerSearch) ||
+        p.descripcion?.toLowerCase().includes(lowerSearch)
       );
     }
 

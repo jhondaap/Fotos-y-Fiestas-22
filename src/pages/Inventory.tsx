@@ -83,7 +83,8 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
           stock_actual: 0, 
           stock_minimo: 2, 
           categoria_id: categories.length > 0 ? categories[0].id : undefined, 
-          barcode: initialScannedCode 
+          barcode: initialScannedCode,
+          descripcion: ""
         });
       }
       onClearScannedCode?.();
@@ -122,7 +123,8 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
 
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          p.barcode?.toLowerCase().includes(searchTerm.toLowerCase());
+                          p.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          p.descripcion?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === "all" || p.categoria_id === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -144,7 +146,8 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
           stock_actual: 0, 
           stock_minimo: 2, 
           categoria_id: categories.length > 0 ? categories[0].id : undefined, 
-          barcode: scannerInput 
+          barcode: scannerInput,
+          descripcion: ""
         });
       }
       setIsModalOpen(true);
@@ -346,7 +349,7 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
             Categoría
           </button>
           <button 
-            onClick={() => { setEditingProduct({ nombre: "", precio: 0, costo: 0, stock_actual: 0, stock_minimo: 2, categoria_id: categories[0]?.id, barcode: "" }); setIsModalOpen(true); }}
+            onClick={() => { setEditingProduct({ nombre: "", precio: 0, costo: 0, stock_actual: 0, stock_minimo: 2, categoria_id: categories[0]?.id, barcode: "", descripcion: "" }); setIsModalOpen(true); }}
             className="flex-1 sm:flex-none bg-brand-lime hover:bg-[#7DFA7D] text-brand-forest font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-brand-lime/30 transition-all active:scale-95"
           >
             <Plus size={18} />
@@ -520,6 +523,16 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
                       value={editingProduct?.nombre}
                       onChange={e => setEditingProduct({ ...editingProduct, nombre: e.target.value })}
                       className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-brand-lime outline-none transition-all"
+                    />
+                  </div>
+                  <div className="col-span-1 md:col-span-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block font-sans">Descripción del Producto</label>
+                    <textarea 
+                      value={editingProduct?.descripcion || ""}
+                      onChange={e => setEditingProduct({ ...editingProduct, descripcion: e.target.value })}
+                      rows={3}
+                      placeholder="Detalles o especificaciones del producto..."
+                      className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-brand-lime outline-none transition-all resize-none"
                     />
                   </div>
                   <div>

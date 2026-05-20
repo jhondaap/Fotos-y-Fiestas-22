@@ -16,7 +16,8 @@ export const mapProductoToProduct = (p: any): Product => {
     stock_minimo: Number(p.stock_minimo),
     categoria_id: p.categoria_id,
     nombre_categoria: p.categorias?.nombre_categoria || "",
-    barcode: p.id_codigo_barras
+    barcode: p.id_codigo_barras,
+    descripcion: p.descripcion || ""
   };
 };
 
@@ -114,7 +115,8 @@ export const createProduct = async (product: Partial<Product>) => {
     precio_venta: product.precio || 0,
     stock: product.stock_actual || 0,
     stock_minimo: product.stock_minimo || 2,
-    categoria_id: product.categoria_id
+    categoria_id: product.categoria_id,
+    descripcion: product.descripcion || ""
   };
 
   const { data, error } = await supabase
@@ -134,7 +136,8 @@ export const updateProduct = async (barcode: string, product: Partial<Product>) 
     precio_venta: product.precio,
     stock: product.stock_actual,
     stock_minimo: product.stock_minimo,
-    categoria_id: product.categoria_id
+    categoria_id: product.categoria_id,
+    descripcion: product.descripcion
   };
 
   const { error } = await supabase
