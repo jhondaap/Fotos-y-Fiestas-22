@@ -14,6 +14,7 @@ import {
   Lock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useModalBackHandler } from "../hooks/useModalBackHandler";
 import {
   fetchDailyReport,
   fetchSoldItems as fetchSoldItemsService,
@@ -60,6 +61,10 @@ export default function Reports() {
   const [date, setDate] = useState(getLocalDateString());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isCloseDayOpen, setIsCloseDayOpen] = useState(false);
+  
+  useModalBackHandler(isCalendarOpen, () => setIsCalendarOpen(false));
+  useModalBackHandler(isCloseDayOpen, () => setIsCloseDayOpen(false));
+
   const [calendarData, setCalendarData] = useState<CalendarData>({ daily: [], monthly: [] });
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
 
@@ -464,7 +469,7 @@ export default function Reports() {
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden"
+              className="relative bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
             >
               <div className="bg-brand-forest p-8 text-white flex justify-between items-center">
                 <div>
@@ -588,7 +593,7 @@ export default function Reports() {
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden p-10 text-center"
+              className="relative bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden p-10 text-center max-h-[90vh] overflow-y-auto"
             >
               <div className="w-20 h-20 bg-brand-lime rounded-full flex items-center justify-center text-brand-forest mx-auto mb-6 shadow-xl shadow-brand-lime/30">
                 <CheckCircle2 size={40} />

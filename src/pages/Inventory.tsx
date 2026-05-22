@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
+import { useModalBackHandler } from "../hooks/useModalBackHandler";
 import {
   fetchProducts,
   fetchCategories,
@@ -53,6 +54,10 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [scannerInput, setScannerInput] = useState("");
   const scannerRef = useRef<HTMLInputElement>(null);
+
+  useModalBackHandler(isModalOpen, () => setIsModalOpen(false));
+  useModalBackHandler(isCategoryModalOpen, () => setIsCategoryModalOpen(false));
+  useModalBackHandler(!!productToDelete, () => setProductToDelete(null));
 
   useEffect(() => {
     fetchData();
@@ -508,7 +513,7 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden"
+              className="relative bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
             >
               <div className="bg-brand-forest p-8 text-white flex justify-between items-center relative">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 -mr-16 -mt-16 rounded-full" />
@@ -644,7 +649,7 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden p-8 text-center"
+              className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden p-8 text-center max-h-[90vh] overflow-y-auto"
             >
               <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
                 <Trash size={40} />
@@ -685,7 +690,7 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden"
+              className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
             >
               <div className="bg-slate-900 p-8 text-white flex justify-between items-center relative">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-brand-lime/5 -mr-12 -mt-12 rounded-full" />

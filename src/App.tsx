@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Pos from "./pages/Pos";
 import Inventory from "./pages/Inventory";
 import Apartados from "./pages/Apartados";
@@ -6,6 +6,7 @@ import Reports from "./pages/Reports";
 import Scanner from "./pages/Scanner";
 import LowStock from "./pages/LowStock";
 import Profile from "./pages/Profile";
+import PriceCheck from "./pages/PriceCheck";
 import { User } from "./types";
 import { 
   ShoppingCart, 
@@ -16,12 +17,13 @@ import {
   X,
   Camera,
   AlertTriangle,
-  User as UserIcon
+  User as UserIcon,
+  Search
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "./lib/utils";
 
-type Page = "pos" | "inventory" | "apartados" | "reports" | "scanner" | "low-stock" | "profile";
+type Page = "pos" | "inventory" | "apartados" | "reports" | "scanner" | "low-stock" | "profile" | "price-check";
 
 const DEFAULT_USER: User = { id: 1, nombre: "Admin", activo: true };
 
@@ -32,6 +34,58 @@ export default function App() {
   });
   const [currentPage, setCurrentPage] = useState<Page>("pos");
 
+  const isPopStateRef = useRef(false);
+
+  // Sincronizar la navegación de páginas con el botón atrás del navegador
+  useEffect(() => {
+    // Reemplaza el estado inicial vacío con la página inicial 'pos'
+    if (!window.history.state) {
+      window.history.replaceState({ page: "pos" }, "");
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      // 1. Si hay una indicación de ignorar el evento (ej. cerrado programático de un modal)
+      if (window.ignoreNextPopstate) {
+        window.ignoreNextPopstate = false;
+        return;
+      }
+
+      // 2. Si hay modales abiertos en la pila, cerrar el más reciente
+      if (window.openModals && window.openModals.length > 0) {
+        const closeFn = window.openModals.pop();
+        if (closeFn) {
+          closeFn();
+        }
+        return;
+      }
+
+      // 3. Cambiar de página
+      isPopStateRef.current = true;
+      if (event.state && event.state.page) {
+        setCurrentPage(event.state.page);
+      } else {
+        setCurrentPage("pos");
+      }
+      isPopStateRef.current = false;
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
+
+  const navigateToPage = (page: Page, replace = false) => {
+    setCurrentPage(page);
+    if (!isPopStateRef.current) {
+      if (replace) {
+        window.history.replaceState({ page }, "");
+      } else {
+        window.history.pushState({ page }, "");
+      }
+    }
+  };
+
   const updateUser = (newUser: User) => {
     setUser(newUser);
     localStorage.setItem("current_user", JSON.stringify(newUser));
@@ -41,6 +95,7 @@ export default function App() {
 
   const navItems = [
     { id: "pos", label: "Nueva Venta", icon: ShoppingCart },
+    { id: "price-check", label: "Consultar Precios", icon: Search },
     { id: "inventory", label: "Inventario", icon: Package },
     { id: "low-stock", label: "Stock Bajo", icon: AlertTriangle },
     { id: "apartados", label: "Apartados", icon: Clock },
@@ -87,7 +142,7 @@ export default function App() {
                   <button
                     key={item.id}
                     onClick={() => {
-                      setCurrentPage(item.id as Page);
+                      navigateToPage(item.id as Page);
                       setIsSidebarOpen(false);
                     }}
                     className={cn(
@@ -109,7 +164,7 @@ export default function App() {
               <div className="pt-6 border-t border-slate-50 mt-auto">
                 <button 
                   onClick={() => {
-                    setCurrentPage("profile");
+                    navigateToPage("profile");
                     setIsSidebarOpen(false);
                   }}
                   className={cn(
@@ -162,6 +217,7 @@ export default function App() {
               className="h-full"
             >
               {currentPage === "pos" && <Pos user={user} />}
+              {currentPage === "price-check" && <PriceCheck />}
               {currentPage === "inventory" && (
                 <Inventory 
                   initialScannedCode={scannedCode} 
@@ -175,14 +231,14 @@ export default function App() {
                 <Profile 
                   user={user} 
                   onUpdateUser={updateUser} 
-                  onBack={() => setCurrentPage("pos")} 
+                  onBack={() => navigateToPage("pos")} 
                 />
               )}
               {currentPage === "scanner" && (
                 <Scanner 
                   onScanSuccess={(code) => {
                     setScannedCode(code);
-                    setCurrentPage("inventory");
+                    navigateToPage("inventory");
                   }} 
                 />
               )}

@@ -4,6 +4,7 @@ import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle2, AlertTriangle,
 import { formatCurrency, cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { fetchProducts, fetchCategories, createSale } from "../lib/supabaseService";
+import { useModalBackHandler } from "../hooks/useModalBackHandler";
 
 interface PosProps {
   user: User;
@@ -30,6 +31,12 @@ export default function Pos({ user }: PosProps) {
     fecha: string;
   } | null>(null);
   const [showConfirmPrint, setShowConfirmPrint] = useState(false);
+
+  useModalBackHandler(showSuccess, () => {
+    setShowSuccess(false);
+    setLastSale(null);
+  });
+  useModalBackHandler(showConfirmPrint, () => setShowConfirmPrint(false));
 
   const total = useMemo(() => cart.reduce((sum, item) => sum + ((item.precio || 0) * (item.cantidad || 0)), 0), [cart]);
 
@@ -463,7 +470,7 @@ export default function Pos({ user }: PosProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-white/95 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-8 text-center"
+              className="absolute inset-0 bg-white/95 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-8 text-center max-h-[90vh] overflow-y-auto"
             >
               <motion.div
                 initial={{ scale: 0.5, rotate: -45 }}
@@ -511,7 +518,7 @@ export default function Pos({ user }: PosProps) {
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="bg-white rounded-[2.5rem] border border-brand-lime/30 p-6 max-w-sm w-full shadow-2xl text-center"
+              className="bg-white rounded-[2.5rem] border border-brand-lime/30 p-6 max-w-sm w-full shadow-2xl text-center max-h-[90vh] overflow-y-auto"
             >
               <div className="w-16 h-16 bg-brand-lime/10 text-brand-forest rounded-full flex items-center justify-center mx-auto mb-4 border border-brand-lime/20">
                 <Printer size={32} />
