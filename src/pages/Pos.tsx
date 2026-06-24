@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Product, SaleItem, User, Category } from "../types";
-import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle2, AlertTriangle, Tag, Printer } from "lucide-react";
+import { Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle2, AlertTriangle, Tag, Printer, Send, Mail } from "lucide-react";
 import { formatCurrency, cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 import { fetchProducts, fetchCategories, createSale } from "../lib/supabaseService";
@@ -31,12 +31,17 @@ export default function Pos({ user }: PosProps) {
     fecha: string;
   } | null>(null);
   const [showConfirmPrint, setShowConfirmPrint] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [sendStep, setSendStep] = useState<"select" | "whatsapp" | "gmail">("select");
+  const [clientPhone, setClientPhone] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
 
   useModalBackHandler(showSuccess, () => {
     setShowSuccess(false);
     setLastSale(null);
   });
   useModalBackHandler(showConfirmPrint, () => setShowConfirmPrint(false));
+  useModalBackHandler(showSendModal, () => setShowSendModal(false));
 
   const total = useMemo(() => cart.reduce((sum, item) => sum + ((item.precio || 0) * (item.cantidad || 0)), 0), [cart]);
 
@@ -207,6 +212,82 @@ export default function Pos({ user }: PosProps) {
     }
   };
 
+  const handleSendWhatsApp = () => {
+    if (!lastSale) return;
+    let cleanedPhone = clientPhone.replace(/\D/g, "");
+    if (cleanedPhone.length === 10 && cleanedPhone.startsWith("3")) {
+      cleanedPhone = "57" + cleanedPhone;
+    }
+    if (!cleanedPhone) {
+      alert("Por favor ingresa un número de teléfono válido.");
+      return;
+    }
+    let text = `*Fotos y Fiestas* 🎈🎉\n`;
+    text += `¡Gracias por tu compra!\n`;
+    text += `-----------------------------------\n`;
+    text += `*Fecha:* ${lastSale.fecha}\n`;
+    text += `*Método de Pago:* ${lastSale.metodoPago}\n`;
+    text += `-----------------------------------\n`;
+    text += `*Detalle:*\n`;
+    lastSale.items.forEach(item => {
+      const itemTotal = (item.precio || 0) * (item.cantidad || 0);
+      text += `- ${item.cantidad}x ${item.nombre} (${formatCurrency(item.precio)} c/u): ${formatCurrency(itemTotal)}\n`;
+    });
+    text += `-----------------------------------\n`;
+    text += `*TOTAL:* ${formatCurrency(lastSale.total)}\n`;
+    if (lastSale.metodoPago === "Efectivo") {
+      text += `*Pagó con:* ${formatCurrency(Number(lastSale.pagoCon) || lastSale.total)}\n`;
+      text += `*Cambio:* ${formatCurrency(lastSale.vuelto)}\n`;
+    }
+    text += `-----------------------------------\n`;
+    text += `¡Esperamos verte de nuevo pronto!`;
+    const encodedText = encodeURIComponent(text);
+    const whatsappUrl = `https://wa.me/${cleanedPhone}?text=${encodedText}`;
+    window.open(whatsappUrl, "_blank");
+    setShowSendModal(false);
+  };
+
+  const handleSendGmail = () => {
+    if (!lastSale) return;
+    if (!clientEmail || !clientEmail.includes("@")) {
+      alert("Por favor ingresa un correo electrónico válido.");
+      return;
+    }
+    let text = `Fotos y Fiestas 🎈🎉\n`;
+    text += `Comprobante de Venta\n`;
+    text += `===================================\n`;
+    text += `Fecha: ${lastSale.fecha}\n`;
+    text += `Método de Pago: ${lastSale.metodoPago}\n`;
+    text += `===================================\n\n`;
+    text += `Detalle de la compra:\n`;
+    lastSale.items.forEach(item => {
+      const itemTotal = (item.precio || 0) * (item.cantidad || 0);
+      text += `${item.cantidad} x ${item.nombre} (${formatCurrency(item.precio)} c/u) - Total: ${formatCurrency(itemTotal)}\n`;
+    });
+    text += `\n===================================\n`;
+    text += `TOTAL: ${formatCurrency(lastSale.total)}\n`;
+    if (lastSale.metodoPago === "Efectivo") {
+      text += `Pagó con: ${formatCurrency(Number(lastSale.pagoCon) || lastSale.total)}\n`;
+      text += `Cambio: ${formatCurrency(lastSale.vuelto)}\n`;
+    }
+    text += `===================================\n\n`;
+    text += `¡Gracias por tu preferencia!\n\n`;
+    text += `Fotos y Fiestas\n`;
+    text += `Carulla Guadalupe Segundo Piso\n`;
+    text += `Teléfono: 304 312 3432\n`;
+    const subject = encodeURIComponent("Comprobante de Venta - Fotos y Fiestas");
+    const body = encodeURIComponent(text);
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    let url = "";
+    if (isMobile) {
+      url = `mailto:${clientEmail}?subject=${subject}&body=${body}`;
+    } else {
+      url = `https://mail.google.com/mail/?view=cm&fs=1&to=${clientEmail}&su=${subject}&body=${body}`;
+    }
+    window.open(url, "_blank");
+    setShowSendModal(false);
+  };
+
   const lowStockCount = useMemo(() => products.filter(p => (p.stock_actual || 0) <= (p.stock_minimo || 0)).length, [products]);
 
   return (
@@ -338,12 +419,6 @@ export default function Pos({ user }: PosProps) {
                   key={item.id} 
                   className="bg-slate-50 rounded-2xl p-4 relative group border border-transparent hover:border-brand-lime/30 transition-all"
                 >
-                  <button 
-                    onClick={() => removeFromCart(item.id)}
-                    className="absolute -top-2 -right-2 w-7 h-7 bg-red-50 text-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm border border-red-100"
-                  >
-                    <Trash2 size={14} />
-                  </button>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex-1 pr-4">
                       <p className="text-sm font-bold text-slate-800 leading-none mb-1">{item.nombre}</p>
@@ -357,7 +432,7 @@ export default function Pos({ user }: PosProps) {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100/50">
                     <div className="flex items-center bg-white rounded-lg border border-slate-100 overflow-hidden">
                       <button 
                         onClick={() => updateQuantity(item.id, -1)}
@@ -373,6 +448,13 @@ export default function Pos({ user }: PosProps) {
                         <Plus size={12} />
                       </button>
                     </div>
+                    <button 
+                      onClick={() => removeFromCart(item.id)}
+                      className="p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors shadow-sm border border-red-100/50 flex items-center justify-center"
+                      title="Eliminar producto"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </motion.div>
               ))}
@@ -482,20 +564,34 @@ export default function Pos({ user }: PosProps) {
               <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tighter uppercase">¡VENTA EXITOSA!</h3>
               <p className="text-slate-500 font-medium mb-4">El inventario se ha actualizado.</p>
               
-              <div className="flex flex-col gap-3 w-full max-w-[240px] mt-2">
-                <button
-                  onClick={() => setShowConfirmPrint(true)}
-                  className="w-full py-3.5 bg-brand-lime text-brand-forest font-black rounded-2xl shadow-lg shadow-brand-lime/20 hover:bg-[#7DFA7D] transition-all active:scale-95 text-sm uppercase tracking-widest flex items-center justify-center gap-2 border border-brand-lime/40"
-                >
-                  <Printer size={18} strokeWidth={2.5} />
-                  Imprimir Ticket
-                </button>
+              <div className="flex flex-col gap-3 w-full max-w-[280px] mt-2">
+                <div className="flex gap-2 w-full">
+                  <button
+                    onClick={() => setShowConfirmPrint(true)}
+                    className="flex-1 py-3.5 bg-brand-lime text-brand-forest font-black rounded-2xl shadow-lg shadow-brand-lime/20 hover:bg-[#7DFA7D] transition-all active:scale-95 text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 border border-brand-lime/40"
+                  >
+                    <Printer size={16} strokeWidth={2.5} />
+                    Imprimir
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSendStep("select");
+                      setClientPhone("");
+                      setClientEmail("");
+                      setShowSendModal(true);
+                    }}
+                    className="flex-1 py-3.5 bg-white text-brand-forest font-black rounded-2xl shadow-lg shadow-gray-100 hover:bg-slate-50 transition-all active:scale-95 text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 border border-slate-200"
+                  >
+                    <Send size={16} strokeWidth={2.5} />
+                    Enviar Ticket
+                  </button>
+                </div>
                 <button
                   onClick={() => {
                     setShowSuccess(false);
                     setLastSale(null);
                   }}
-                  className="w-full py-3.5 bg-slate-100 text-slate-600 font-black rounded-2xl hover:bg-slate-200 transition-all active:scale-95 text-sm uppercase tracking-widest"
+                  className="w-full py-3.5 bg-slate-100 text-slate-600 font-black rounded-2xl hover:bg-slate-200 transition-all active:scale-95 text-xs uppercase tracking-wider"
                 >
                   Nueva Venta
                 </button>
@@ -546,6 +642,129 @@ export default function Pos({ user }: PosProps) {
                   Confirmar Impresión
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Send Ticket Modal */}
+      <AnimatePresence>
+        {showSendModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[60] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-[2.5rem] border border-slate-100 p-6 max-w-sm w-full shadow-2xl text-center max-h-[90vh] overflow-y-auto"
+            >
+              {sendStep === "select" && (
+                <>
+                  <div className="w-16 h-16 bg-brand-lime/10 text-brand-forest rounded-full flex items-center justify-center mx-auto mb-4 border border-brand-lime/20 animate-pulse">
+                    <Send size={30} className="translate-x-[1px] -translate-y-[1px]" />
+                  </div>
+                  <h4 className="text-xl font-black text-slate-800 mb-2">¿Cómo deseas enviar el ticket?</h4>
+                  <p className="text-slate-500 text-xs font-semibold mb-6">
+                    Selecciona una de las opciones para enviar el comprobante de venta.
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    <button
+                      onClick={() => setSendStep("whatsapp")}
+                      className="w-full py-4 bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold rounded-2xl transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-green-500/10 active:scale-95 cursor-pointer"
+                    >
+                      <span className="text-base">📱</span> Enviar por WhatsApp
+                    </button>
+                    <button
+                      onClick={() => setSendStep("gmail")}
+                      className="w-full py-4 bg-[#EA4335] hover:bg-[#d63a2e] text-white font-bold rounded-2xl transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-red-500/10 active:scale-95 cursor-pointer"
+                    >
+                      <Mail size={18} /> Enviar por Gmail
+                    </button>
+                    <button
+                      onClick={() => setShowSendModal(false)}
+                      className="w-full py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all text-sm uppercase tracking-widest mt-2 active:scale-95 cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {sendStep === "whatsapp" && (
+                <>
+                  <div className="w-16 h-16 bg-green-50 text-[#25D366] rounded-full flex items-center justify-center mx-auto mb-4 border border-green-100">
+                    <span className="text-2xl">📱</span>
+                  </div>
+                  <h4 className="text-xl font-black text-slate-800 mb-2">Enviar por WhatsApp</h4>
+                  <p className="text-slate-500 text-xs font-semibold mb-6">
+                    Ingresa el número de teléfono del cliente.
+                  </p>
+                  <div className="space-y-4">
+                    <input
+                      type="tel"
+                      placeholder="Ej: 3043123432"
+                      value={clientPhone}
+                      onChange={(e) => setClientPhone(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center text-lg font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#25D366]/50 focus:border-[#25D366] transition-all"
+                      autoFocus
+                    />
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setSendStep("select")}
+                        className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all text-xs uppercase tracking-widest active:scale-95 cursor-pointer"
+                      >
+                        Atrás
+                      </button>
+                      <button
+                        onClick={handleSendWhatsApp}
+                        className="flex-1 py-3.5 bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold rounded-2xl transition-all text-xs uppercase tracking-widest active:scale-95 cursor-pointer"
+                      >
+                        Confirmar
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {sendStep === "gmail" && (
+                <>
+                  <div className="w-16 h-16 bg-red-50 text-[#EA4335] rounded-full flex items-center justify-center mx-auto mb-4 border border-red-100">
+                    <Mail size={32} />
+                  </div>
+                  <h4 className="text-xl font-black text-slate-800 mb-2">Enviar por Gmail</h4>
+                  <p className="text-slate-500 text-xs font-semibold mb-6">
+                    Ingresa el correo electrónico del cliente.
+                  </p>
+                  <div className="space-y-4">
+                    <input
+                      type="email"
+                      placeholder="cliente@ejemplo.com"
+                      value={clientEmail}
+                      onChange={(e) => setClientEmail(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center text-base font-bold text-slate-800 outline-none focus:ring-2 focus:ring-[#EA4335]/50 focus:border-[#EA4335] transition-all"
+                      autoFocus
+                    />
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setSendStep("select")}
+                        className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all text-xs uppercase tracking-widest active:scale-95 cursor-pointer"
+                      >
+                        Atrás
+                      </button>
+                      <button
+                        onClick={handleSendGmail}
+                        className="flex-1 py-3.5 bg-[#EA4335] hover:bg-[#d63a2e] text-white font-bold rounded-2xl transition-all text-xs uppercase tracking-widest active:scale-95 cursor-pointer"
+                      >
+                        Confirmar
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </motion.div>
           </motion.div>
         )}
