@@ -176,7 +176,18 @@ export default function App() {
                 ))}
               </nav>
 
-              <div className="pt-6 border-t border-slate-50 mt-auto">
+              <div className="pt-6 border-t border-slate-50 mt-auto space-y-2">
+                <button
+                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all group font-bold text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+                >
+                  {theme === "dark" ? (
+                    <Sun size={20} className="text-amber-400 transition-transform group-hover:scale-110 group-hover:rotate-45" />
+                  ) : (
+                    <Moon size={20} className="text-slate-300 transition-transform group-hover:scale-110 group-hover:-rotate-12" />
+                  )}
+                  <span className="text-sm">{theme === "dark" ? "Modo Claro" : "Modo Oscuro"}</span>
+                </button>
                 <button 
                   onClick={() => {
                     navigateToPage("profile");
