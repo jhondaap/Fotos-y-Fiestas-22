@@ -189,16 +189,26 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
     setCategoryMessage(null);
 
     try {
-      await createCategory(newCategory);
+      const created = await createCategory(newCategory);
       setCategoryMessage({ type: "success", text: "¡Categoría registrada con éxito!" });
       
-      // Keep modal open briefly to show success animation/state
+      // Fetch updated categories immediately so they appear in the select dropdown
+      const updatedCats = await fetchCategories();
+      setCategories(updatedCats);
+
+      // If we are currently editing/creating a product, auto-select this new category
+      if (editingProduct && created && created.id) {
+        setEditingProduct(prev => prev ? { ...prev, categoria_id: created.id } : null);
+      }
+
+      // Close modal and clean up after 1s (showing success animation briefly)
       setTimeout(() => {
         setIsCategoryModalOpen(false);
         setNewCategory({ nombre_categoria: "", descripcion: "" });
         setCategoryMessage(null);
-        fetchData();
-      }, 1500);
+        // Refresh products in background
+        fetchProducts().then(pData => setProducts(pData)).catch(console.error);
+      }, 1000);
     } catch (error) {
       console.error("Error creating category:", error);
       setCategoryMessage({ type: "error", text: "Error al registrar la categoría. Intente de nuevo." });
@@ -562,14 +572,24 @@ export default function Inventory({ initialScannedCode, onClearScannedCode }: In
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Categoría</label>
-                    <select 
-                      required
-                      value={editingProduct?.categoria_id}
-                      onChange={e => setEditingProduct({ ...editingProduct, categoria_id: Number(e.target.value) })}
-                      className="w-full bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-brand-lime outline-none transition-all appearance-none"
-                    >
-                      {categories.map(c => <option key={c.id} value={c.id}>{c.nombre_categoria}</option>)}
-                    </select>
+                    <div className="flex gap-2 items-stretch">
+                      <select 
+                        required
+                        value={editingProduct?.categoria_id}
+                        onChange={e => setEditingProduct({ ...editingProduct, categoria_id: Number(e.target.value) })}
+                        className="flex-1 bg-slate-50 border-none rounded-2xl p-4 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-brand-lime outline-none transition-all appearance-none"
+                      >
+                        {categories.map(c => <option key={c.id} value={c.id}>{c.nombre_categoria}</option>)}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setIsCategoryModalOpen(true)}
+                        className="bg-brand-lime hover:bg-[#7DFA7D] text-brand-forest font-black px-5 rounded-2xl shadow-lg shadow-brand-lime/20 transition-all active:scale-95 flex items-center justify-center border border-brand-lime/40"
+                        title="Nueva Categoría"
+                      >
+                        <Plus size={20} strokeWidth={2.5} />
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Precio Venta</label>

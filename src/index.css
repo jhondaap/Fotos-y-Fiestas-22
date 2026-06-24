@@ -7,13 +7,72 @@
   
   --color-brand-lime: #98FF98;
   --color-brand-forest: #1B3022;
-  --color-brand-bg: #F8F9FA;
+  
+  --color-brand-bg: var(--brand-bg);
+  --color-white: var(--white-color);
+  
+  --color-slate-50: var(--slate-50-color);
+  --color-slate-100: var(--slate-100-color);
+  --color-slate-200: var(--slate-200-color);
+  --color-slate-300: var(--slate-300-color);
+  --color-slate-400: var(--slate-400-color);
+  --color-slate-500: var(--slate-500-color);
+  --color-slate-600: var(--slate-600-color);
+  --color-slate-700: var(--slate-700-color);
+  --color-slate-800: var(--slate-800-color);
+  --color-slate-900: var(--slate-900-color);
+  
+  --color-gray-50: var(--gray-50-color);
+  --color-gray-100: var(--gray-100-color);
+  --color-gray-200: var(--gray-200-color);
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --brand-bg: #F8F9FA;
+  --white-color: #FFFFFF;
+  
+  --slate-50-color: #F8FAFC;
+  --slate-100-color: #F1F5F9;
+  --slate-200-color: #E2E8F0;
+  --slate-300-color: #CBD5E1;
+  --slate-400-color: #94A3B8;
+  --slate-500-color: #64748B;
+  --slate-600-color: #475569;
+  --slate-700-color: #334155;
+  --slate-800-color: #1E293B;
+  --slate-900-color: #0F172A;
+  
+  --gray-50-color: #F9FAFB;
+  --gray-100-color: #F3F4F6;
+  --gray-200-color: #E5E7EB;
+}
+
+.dark {
+  --brand-bg: #0b100c;
+  --white-color: #131b15;
+  
+  --slate-50-color: #1b261f;
+  --slate-100-color: #223027;
+  --slate-200-color: #2e4034;
+  --slate-300-color: #4b6653;
+  --slate-400-color: #8fa896;
+  --slate-500-color: #a3bfa9;
+  --slate-600-color: #cbd5e1;
+  --slate-700-color: #e2e8f0;
+  --slate-800-color: #f8fafc;
+  --slate-900-color: #ffffff;
+  
+  --gray-50-color: #19251d;
+  --gray-100-color: #1f2f25;
+  --gray-200-color: #2b3f33;
 }
 
 @layer base {
   body {
     -webkit-tap-highlight-color: transparent;
-    @apply bg-brand-bg text-slate-900;
+    @apply bg-brand-bg text-slate-900 transition-colors duration-200;
   }
 }
 

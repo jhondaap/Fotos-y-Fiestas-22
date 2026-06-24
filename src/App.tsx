@@ -18,7 +18,9 @@ import {
   Camera,
   AlertTriangle,
   User as UserIcon,
-  Search
+  Search,
+  Sun,
+  Moon
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "./lib/utils";
@@ -33,6 +35,19 @@ export default function App() {
     return saved ? JSON.parse(saved) : DEFAULT_USER;
   });
   const [currentPage, setCurrentPage] = useState<Page>("pos");
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const saved = localStorage.getItem("theme");
+    return (saved === "light" || saved === "dark") ? saved : "dark";
+  });
+
+  useEffect(() => {
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+    localStorage.setItem("theme", theme);
+  }, [theme]);
 
   const isPopStateRef = useRef(false);
 
